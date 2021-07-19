@@ -1,6 +1,38 @@
 import tensorflow as tf
 import numpy as np
 
+class Unflatten3D(tf.keras.layers.Layer):
+    def __init__(self, num_outputs):
+        super(Unflatten3D, self).__init__()
+        self.num_outputs = num_outputs
+
+    def call(self, inputs):
+        x = inputs.view(inputs.size()[0], [64, 4, 4])
+        return x
+
+
+class Flatten3D(tf.keras.layers.Layer):
+    def __init__(self, num_outputs):
+        super(Flatten3D, self).__init__()
+        self.num_outputs = num_outputs
+
+    def call(self, inputs):
+        x_ind = tf.size(inputs)[0]
+        x = tf.view(inputs, -1)
+        #x = inputs.view(inputs.size()[0], -1)
+        return x
+
+
+class Unsqueeze(tf.keras.layers.Layer):
+    def __init__(self, num_outputs):
+        super(Unsqueeze, self).__init__()
+        self.num_outputs = num_outputs
+
+    def call(self, inputs):
+        x = tf.expand_dims(inputs, -1)
+        return x
+
+
 class GradientReversal():
     def forward(self, inp):
         return inp
@@ -15,7 +47,6 @@ class NMCA():
         self.dnn = [input] + structure + [output]
         self.layers = []
         self._build()
-
 
         tf.linalg.matmul(Z, W)
         P, _, Q = tf.linalg.svd()
@@ -34,6 +65,7 @@ class NMCA():
                            loss=self.lossfunction,
                            )
 
+
 class Decoder():
     def __init__(self, z_dim, c_dim, channels):
         self.model = self._build(z_dim, c_dim, channels)
@@ -43,18 +75,12 @@ class Decoder():
             tf.keras.layers.Flatten(input_dim=z_dim + c_dim),
             tf.keras.layers.Dense(256, activation='relu'),
             tf.keras.layers.Dense(1024, activation='relu'),
-            tf.keras.Linear(256, 1024),
-            tf.keras.ReLU(True),
-            tf.keras.Unflatten3D(),
-            tf.keras.ConvTranspose2d(64, 64, 4, 2, 1),
-            tf.keras.ReLU(True),
-            tf.keras.ConvTranspose2d(64, 32, 4, 2, 1),
-            tf.keras.ReLU(True),
-            tf.keras.ConvTranspose2d(32, 32, 4, 2, 1),
-            tf.keras.ReLU(True),
-            tf.keras.ConvTranspose2d(32, channels, 4, 2, 1),
+            Unflatten3D(64),
+            tf.keras.layers.Conv2DTranspose(64, 4, 2, 'valid', activation='relu'),
+            tf.keras.layers.Conv2DTranspose(32, 4, 2, 'valid', activation='relu'),
+            tf.keras.layers.Conv2DTranspose(32, 4, 2, 'valid', activation='relu'),
+            tf.keras.layers.Conv2DTranspose(channels, 4, 2, 'valid', activation='relu')
             )
-
         return model
 
 
