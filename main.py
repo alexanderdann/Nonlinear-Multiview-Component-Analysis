@@ -1,73 +1,80 @@
 import tensorflow as tf
 import numpy as np
+from CustomizedLayers import *
 
-class Unflatten3D(tf.keras.layers.Layer):
-    def __init__(self, num_outputs):
-        super(Unflatten3D, self).__init__()
-        self.num_outputs = num_outputs
+class MLP(tf.keras.Model):
+    def __init__(self, input_dim, hidden_layers, output_dim, probability=0.0):
+        super(MLP, self).__init__()
+        self.network = tf.keras.Sequential(tf.keras.layers.InputLayer(input_dim))
+        structure = hidden_layers + [output_dim]
 
-    def call(self, inputs):
-        x = inputs.view(inputs.size()[0], [64, 4, 4])
-        return x
+        for dim in structure:
+            self.network.add(tf.keras.layers.Dense(dim, activation='relu'))
+            self.network.add(tf.keras.layers.Dropout(dim))
 
+    def call(self, input):
+        result = self.network(input)
+        return result
 
-class Flatten3D(tf.keras.layers.Layer):
-    def __init__(self, num_outputs):
-        super(Flatten3D, self).__init__()
-        self.num_outputs = num_outputs
+class MiniMaxCCA(tf.keras.Model):
+    def __init__(self, view1_dim, view2_dim, phi_size, tau_size, latent_dim=1):
+        super(MiniMaxCCA, self).__init__()
+        self.phi = MLP(view1_dim, phi_size, latent_dim)
+        self.tau = MLP(view2_dim, tau_size, latent_dim)
 
-    def call(self, inputs):
-        x_ind = tf.size(inputs)[0]
-        x = tf.view(inputs, -1)
-        #x = inputs.view(inputs.size()[0], -1)
-        return x
+        self.GradReverse1 = GradientReversal()
+        self.GradReverse2 = GradientReversal()
 
+    def call(self, input):
+        phi_reg = self.phi(self.GradReverse1(input))
+        tau_reg = self.tau(self.GradReverse2(input))
 
-class Unsqueeze(tf.keras.layers.Layer):
-    def __init__(self, num_outputs):
-        super(Unsqueeze, self).__init__()
-        self.num_outputs = num_outputs
-
-    def call(self, inputs):
-        x = tf.expand_dims(inputs, -1)
-        return x
-
-
-class GradientReversal():
-    def forward(self, inp):
-        return inp
-
-    def backward(self, grad_output):
-        grad_input = grad_output.clone()
-        return -grad_input
-
-class NMCA():
-    def __init__(self, input, structure, output):
-        self.gamma_t = tf.Variable(0.1, tf.float32)
-        self.dnn = [input] + structure + [output]
-        self.layers = []
-        self._build()
-
-        tf.linalg.matmul(Z, W)
-        P, _, Q = tf.linalg.svd()
-
-    def lossfunction(self, theta_t, U_t):
-        return 2
-
-    def _build(self):
-        for dim in self.dnn:
-            self.layers.append(
-                tf.keras.layers.Dense(dim, 'sigmoid')
-            )
-        self.model = tf.keras.Sequential(self.layers)
-
-        self.model.compile(optimizer='adam',
-                           loss=self.lossfunction,
-                           )
+        return phi_reg, tau_reg
 
 
-class Decoder():
+class CNNencoder(tf.keras.Model):
     def __init__(self, z_dim, c_dim, channels):
+        super(CNNencoder, self).__init__()
+        self.model, self.S, self.P = self._build(z_dim, c_dim, channels)
+
+    def _build(self, z_dim, c_dim, channels):
+        model = tf.keras.Sequential(
+            tf.keras.layers.InputLayer(32),
+            tf.keras.layers.Conv2DTranspose(channels, 4, 2, 'valid', activation='relu'),
+            tf.keras.layers.Conv2DTranspose(32, 4, 2, 'valid', activation='relu'),
+            tf.keras.layers.Conv2DTranspose(64, 4, 2, 'valid', activation='relu'),
+            tf.keras.layers.Conv2DTranspose(64, 4, 2, 'valid', activation='relu'),
+            Flatten3D(64),
+            tf.keras.layers.Dense(1024, activation='relu'),
+            tf.keras.layers.Dense(256, activation='relu')
+        )
+
+        S = tf.keras.Sequential(
+            tf.keras.layers.InputLayer(256),
+            tf.keras.layers.Dense(z_dim)
+        )
+
+        P = tf.keras.Sequential(
+            tf.keras.layers.InputLayer(256),
+            tf.keras.layers.Dense(c_dim)
+        )
+
+        return model, S, P
+
+    def call(self, input):
+        combined_view = self.model(input)
+        shared_view = self.S(combined_view)
+        private_view = self.P(combined_view)
+        return shared_view, private_view
+
+
+
+
+
+
+class CNNdecoder(tf.keras.Model):
+    def __init__(self, z_dim, c_dim, channels):
+        super(CNNdecoder, self).__init__()
         self.model = self._build(z_dim, c_dim, channels)
 
     def _build(self, z_dim, c_dim, channels):
@@ -83,24 +90,48 @@ class Decoder():
             )
         return model
 
+    def call(self, shared, private):
+        input = tf.concat([shared, private], 1)
+        output = self.model(input)
+        return output
 
-class CNNDAE():
-    def __init__(self, input, structure, output):
+
+
+
+
+class CNNDAE(tf.keras.Model):
+    def __init__(self, num_views, z_dim=10, c_dim=2, channels=1):
+        super(CNNDAE, self).__init__()
+        self.num_views = num_views
         self.gamma_t = tf.Variable(0.1, tf.float32)
-        self.dnn = [input] + structure + [output]
-        self.layers = []
-        self._build()
 
-    def _build(self):
-        for dim in self.dnn:
-            self.layers.append(
-                tf.keras.layers.Dense(dim, 'sigmoid')
-            )
-        self.model = tf.keras.Sequential(self.layers)
+        self.Encoders, self.Decoders = [], []
+        for view in range(self.num_views):
+            self.Encoders.append(CNNencoder(z_dim, c_dim, channels))
+            self.Decoders.append(CNNdecoder(z_dim, c_dim, channels))
 
-        self.model.compile(optimizer='adam',
-                           loss=self.lossfunction,
-                           )
+    def encode(self, input):
+        shared_components, private_components = [], []
+        for view in range(self.num_views):
+            shared, private = self.Encoders[view](input[view])
+            shared_components.append(shared)
+            private_components.append(private)
+
+        return shared_components, private_components
+
+    def decode(self, shared, private):
+        reconstructed = []
+        for view in range(self.num_views):
+            tmp = self.Decoders[view](shared[view], private[view])
+            reconstructed.append(tmp)
+
+        return reconstructed
+
+    def call(self, input):
+        shared_components, private_components = self.encode(input)
+        reconstructed = self.decode(shared_components, private_components)
+        return shared_components, private_components, reconstructed
+
 
 
 if __name__ == '__main__':
