@@ -1,5 +1,4 @@
 import tensorflow as tf
-import numpy as np
 
 @tf.custom_gradient
 def GradientReversalOperator(x):

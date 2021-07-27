@@ -80,3 +80,5 @@ def get_cars3d(filedir='./data/cars/'):
     view2 = np.concatenate(view2, axis=0)
 
     return view1, view2
+
+
