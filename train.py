@@ -23,3 +23,6 @@ def update_U(model, eval_helper, z_dim):
     U_nofac = tf.matmul(P, Q_T)
     U = U_nofac * tf.sqrt(U_nofac.shape[0])
     return U
+
+
+
