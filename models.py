@@ -2,145 +2,6 @@ import tensorflow as tf
 import numpy as np
 from CustomizedLayers import GradientReversal, Flatten3D, Unflatten3D
 
-class NonlinearMultiviewComponentAnalysis(tf.keras.Model):
-    def __init__(self, n_views, shared_dim, private_dim, encoder_layers, decoder_layers):
-        super(NonlinearMultiviewComponentAnalysis, self).__init__()
-        DeepAE = DeepAutoencoder(num_views=n_views, z_dim=shared_dim, c_dim=private_dim,
-                              encoder_layers=encoder_layers, decoder_layers=decoder_layers
-                              )
-
-
-class MultilayerPerceptron(tf.keras.Model):
-    def __init__(self, input_dim, hidden_layers, output_dim, probability=0.0):
-        super(MultilayerPerceptron, self).__init__()
-        self.network = tf.keras.Sequential(tf.keras.layers.InputLayer(input_dim))
-        structure = hidden_layers + [output_dim]
-
-        for dim in structure:
-            self.network.add(tf.keras.layers.Dense(dim, activation='relu'))
-            # Reread paper with regards to dropout
-            self.network.add(tf.keras.layers.Dropout(dim))
-
-    def call(self, input):
-        result = self.network(input)
-        return result
-
-class MiniMaxCCA(tf.keras.Model):
-    def __init__(self, view1_dim, view2_dim, phi_size, tau_size, latent_dim=1):
-        super(MiniMaxCCA, self).__init__()
-        self.phi = MultilayerPerceptron(view1_dim, phi_size, latent_dim)
-        self.tau = MultilayerPerceptron(view2_dim, tau_size, latent_dim)
-
-        self.GradReverse1 = GradientReversal()
-        self.GradReverse2 = GradientReversal()
-
-    def call(self, input):
-        phi_reg = self.phi(self.GradReverse1(input))
-        tau_reg = self.tau(self.GradReverse2(input))
-
-        return phi_reg, tau_reg
-
-class Encoder(tf.keras.Model):
-    def __init__(self, z_dim, c_dim, layers):
-        super(Encoder, self).__init__()
-        self.model, self.S, self.P = self._build(z_dim, c_dim, layers)
-
-    def _build(self, z_dim, c_dim, layers):
-        model = tf.keras.Sequential(
-            tf.keras.layers.InputLayer(z_dim + c_dim)
-        )
-        for layer_info in layers:
-            model.add(
-                tf.keras.layers.Dense(layer_info[0], activation=layer_info[1])
-            )
-
-        S = tf.keras.Sequential(
-            tf.keras.layers.InputLayer(layers[-1]),
-            tf.keras.layers.Dense(z_dim)
-        )
-
-        P = tf.keras.Sequential(
-            tf.keras.layers.InputLayer(layers[-1]),
-            tf.keras.layers.Dense(c_dim)
-        )
-
-        return model, S, P
-
-    def call(self, input):
-        combined_view = self.model(input)
-        shared_view = self.S(combined_view)
-        private_view = self.P(combined_view)
-        return shared_view, private_view
-
-class Decoder(tf.keras.Model):
-    def __init__(self, z_dim, c_dim, layers):
-        super(Decoder, self).__init__()
-        self.model = self._build(z_dim, c_dim, layers)
-
-    def _build(self, z_dim, c_dim, layers):
-        model = tf.keras.Sequential(
-            tf.keras.layers.InputLayer(input_dim=z_dim + c_dim)
-        )
-
-        for layer_info in layers:
-            model.add(
-                tf.keras.layers.Dense(layer_info[0], activation=layer_info[1])
-            )
-
-        return model
-
-    def call(self, shared, private):
-        input = tf.concat([shared, private], 1)
-        output = self.model(input)
-        return output
-
-class DeepAutoencoder(tf.keras.Model):
-    def __init__(self, num_views, z_dim, c_dim, encoder_layers, decoder_layers):
-        super(DeepAutoencoder, self).__init__()
-        self.num_views = num_views
-        self.gamma_t = tf.Variable(0.1, tf.float32)
-
-        self.Encoders, self.Decoders = [], []
-        for view in range(self.num_views):
-            self.Encoders.append(Encoder(z_dim, c_dim, encoder_layers))
-            self.Decoders.append(Decoder(z_dim, c_dim, decoder_layers))
-
-    def encode(self, input):
-        shared_components, private_components = [], []
-        for view in range(self.num_views):
-            shared, private = self.Encoders[view](input[view])
-            shared_components.append(shared)
-            private_components.append(private)
-
-        return shared_components, private_components
-
-    def decode(self, shared, private):
-        reconstructed = []
-        for view in range(self.num_views):
-            tmp = self.Decoders[view](shared[view], private[view])
-            reconstructed.append(tmp)
-
-        return reconstructed
-
-    def loss(self, input1, input2, z_dim, c_dim):
-        assert input1.shape == input2.shape
-
-        N = input1.shape[1]
-
-        # returns (A, B) (epsilon, omega, canonical_correlations)
-        # Where A and B are the transformation matrices to achieve
-        # canonical variables epsilon and omega, as well as the
-        # canonical correlations
-        t_matrices, _ = CCA(input1, input2, z_dim+c_dim).getitems()
-
-        
-
-        #L_theta_U = lambda N:
-
-    def call(self, input):
-        shared_components, private_components = self.encode(input)
-        reconstructed = self.decode(shared_components, private_components)
-        return shared_components, private_components, reconstructed
 
 class CCA():
     def __init__(self, view1, view2, outdim):
@@ -166,9 +27,9 @@ class CCA():
 
         print(f'V1_Bar: {V1_bar.shape}')
 
-        Sigma12 = (tf.linalg.matmul(tf.transpose(V1_bar), V2_bar)) / (M-1)
-        Sigma11 = (tf.linalg.matmul(tf.transpose(V1_bar), V1_bar) + r1 * np.eye(V1.shape[1])) / (M-1)
-        Sigma22 = (tf.linalg.matmul(tf.transpose(V2_bar), V2_bar) + r2 * np.eye(V2.shape[1])) / (M-1)
+        Sigma12 = (tf.linalg.matmul(tf.transpose(V1_bar), V2_bar)) / (M - 1)
+        Sigma11 = (tf.linalg.matmul(tf.transpose(V1_bar), V1_bar) + r1 * np.eye(V1.shape[1])) / (M - 1)
+        Sigma22 = (tf.linalg.matmul(tf.transpose(V2_bar), V2_bar) + r2 * np.eye(V2.shape[1])) / (M - 1)
 
         Sigma11_root_inv = tf.linalg.sqrtm(tf.linalg.inv(Sigma11))
         Sigma22_root_inv = tf.linalg.sqrtm(tf.linalg.inv(Sigma22))
@@ -192,74 +53,58 @@ class CCA():
 
         return A, B, epsilon, omega, D[0:outdim]
 
-class CNNencoder(tf.keras.Model):
-    def __init__(self, z_dim, c_dim, channels):
-        super(CNNencoder, self).__init__()
-        self.model, self.S, self.P = self._build(z_dim, c_dim, channels)
 
-    def _build(self, z_dim, c_dim, channels):
-        model = tf.keras.Sequential(
-            tf.keras.layers.InputLayer(32),
-            tf.keras.layers.Conv2DTranspose(channels, 4, 2, 'valid', activation='relu'),
-            tf.keras.layers.Conv2DTranspose(32, 4, 2, 'valid', activation='relu'),
-            tf.keras.layers.Conv2DTranspose(64, 4, 2, 'valid', activation='relu'),
-            tf.keras.layers.Conv2DTranspose(64, 4, 2, 'valid', activation='relu'),
-            Flatten3D(64),
-            tf.keras.layers.Dense(1024, activation='relu'),
-            tf.keras.layers.Dense(256, activation='relu')
-        )
-
-        S = tf.keras.Sequential(
-            tf.keras.layers.InputLayer(256),
-            tf.keras.layers.Dense(z_dim)
-        )
-
-        P = tf.keras.Sequential(
-            tf.keras.layers.InputLayer(256),
-            tf.keras.layers.Dense(c_dim)
-        )
-
-        return model, S, P
-
-    def call(self, input):
-        combined_view = self.model(input)
-        shared_view = self.S(combined_view)
-        private_view = self.P(combined_view)
-        return shared_view, private_view
-
-class CNNdecoder(tf.keras.Model):
-    def __init__(self, z_dim, c_dim, channels):
-        super(CNNdecoder, self).__init__()
-        self.model = self._build(z_dim, c_dim, channels)
-
-    def _build(self, z_dim, c_dim, channels):
-        model = tf.keras.Sequential(
-            tf.keras.layers.Flatten(input_dim=z_dim + c_dim),
-            tf.keras.layers.Dense(256, activation='relu'),
-            tf.keras.layers.Dense(1024, activation='relu'),
-            Unflatten3D(64),
-            tf.keras.layers.Conv2DTranspose(64, 4, 2, 'valid', activation='relu'),
-            tf.keras.layers.Conv2DTranspose(32, 4, 2, 'valid', activation='relu'),
-            tf.keras.layers.Conv2DTranspose(32, 4, 2, 'valid', activation='relu'),
-            tf.keras.layers.Conv2DTranspose(channels, 4, 2, 'valid', activation='relu')
-            )
-        return model
-
-    def call(self, shared, private):
-        input = tf.concat([shared, private], 1)
-        output = self.model(input)
-        return output
-
-class CNNDAE(tf.keras.Model):
-    def __init__(self, num_views, z_dim=10, c_dim=2, channels=1):
-        super(CNNDAE, self).__init__()
+class NonlinearComponentAnalysis(tf.keras.Model):
+    def __init__(self, num_views, z_dim, c_dim, encoder_layers, decoder_layers):
+        super(NonlinearComponentAnalysis, self).__init__()
         self.num_views = num_views
         self.gamma_t = tf.Variable(0.1, tf.float32)
 
-        self.Encoders, self.Decoders = [], []
-        for view in range(self.num_views):
-            self.Encoders.append(CNNencoder(z_dim, c_dim, channels))
-            self.Decoders.append(CNNdecoder(z_dim, c_dim, channels))
+        self.model = self._build(z_dim, c_dim, encoder_layers, decoder_layers)
+
+    def _build(self, z_dim, c_dim, encoder_layers, decoder_layers):
+        model_view1 = tf.keras.Sequential(
+            tf.keras.layers.InputLayer(input_dim=1)
+        )
+
+        for encoder_info in encoder_layers:
+            model_view1.add(
+                tf.keras.layers.Dense(encoder_info[0], activation=encoder_info[1])
+            )
+
+        model_view2 = tf.keras.Sequential(
+            tf.keras.layers.InputLayer(input_dim=1)
+        )
+
+        for encoder_info in encoder_layers:
+            model_view2.add(
+                tf.keras.layers.Dense(encoder_info[0], activation=encoder_info[1])
+            )
+
+        # Get intermediate representations to calculate CCA
+        self.weights1 = model_view1.get_layer(index=-1)
+        self.weights2 = model_view1.get_layer(index=-1)
+        # returns (A, B) (epsilon, omega, canonical_correlations)
+        # Where A and B are the transformation matrices to achieve
+        # canonical variables epsilon and omega, as well as the
+        # canonical correlations
+        t_matrices, _ = CCA(self.weights1, self.weights2, z_dim + c_dim).getitems()
+
+        # To keep notation as in the paper
+        self.B_1 = t_matrices[0]
+        self.B_2 = t_matrices[1]
+
+        for decoder_info in decoder_layers:
+            model_view1.add(
+                tf.keras.layers.Dense(decoder_info[0], activation=decoder_info[1])
+            )
+
+        for decoder_info in decoder_layers:
+            model_view2.add(
+                tf.keras.layers.Dense(decoder_info[0], activation=decoder_info[1])
+            )
+
+   
 
     def encode(self, input):
         shared_components, private_components = [], []
@@ -278,13 +123,23 @@ class CNNDAE(tf.keras.Model):
 
         return reconstructed
 
-    def call(self, input):
-        shared_components, private_components = self.encode(input)
-        reconstructed = self.decode(shared_components, private_components)
-        return shared_components, private_components, reconstructed
+    def loss(self, final1, final2):
+        init1 = self.inital1
+        init2 = self.inital2
 
+        U = self.update_U()
 
+        lambda_reg = tf.constant(0.1, dtype=tf.float64)
+        arg1 = tf.Variable(U - tf.matmul(self.B_1, self.weights1), dtype=tf.float64)
+        arg2 = tf.Variable(U - tf.matmul(self.B_2, self.weights2), dtype=tf.float64)
+        args = [arg1, arg2]
+        tmp_loss1 = [tf.math.reduce_euclidean_norm(arg) ** 2 for arg in args]
+        tmp_loss1 = tf.math.reduce_sum(tf.Variable(tmp_loss1, dtype=tf.float64))
 
+        reg_args = [tf.Variable(init1 - final1, dtype=tf.float64),
+                    tf.Variable(init2 - final2, dtype=tf.float64)]
+        tmp_loss2 = [tf.math.reduce_euclidean_norm(arg) ** 2 for arg in reg_args]
+        tmp_loss2 = lambda_reg * tf.math.reduce_sum(tf.Variable(tmp_loss2, dtype=tf.float64))
 
-
-
+        final_loss = tmp_loss1 + tmp_loss2
+        return final_loss
