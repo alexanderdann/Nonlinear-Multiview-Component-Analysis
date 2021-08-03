@@ -59,6 +59,7 @@ class NonlinearComponentAnalysis(tf.keras.Model):
         super(NonlinearComponentAnalysis, self).__init__()
         self.num_views = num_views
         self.gamma_t = tf.Variable(0.1, tf.float32)
+        self.U = 0
 
         self.model = self._build(z_dim, c_dim, encoder_layers, decoder_layers)
 
@@ -104,8 +105,6 @@ class NonlinearComponentAnalysis(tf.keras.Model):
                 tf.keras.layers.Dense(decoder_info[0], activation=decoder_info[1])
             )
 
-   
-
     def encode(self, input):
         shared_components, private_components = [], []
         for view in range(self.num_views):
@@ -123,15 +122,22 @@ class NonlinearComponentAnalysis(tf.keras.Model):
 
         return reconstructed
 
+    def update_U(self, B_views, N):
+        dim = B_views[0].shape[1]
+        W = tf.eye([dim, dim]) - tf.matmul(tf.ones([dim, dim]), tf.transpose(tf.ones([dim, dim])))
+        int_U = tf.reduce_sum(tf.constant([tf.matmul(B, W) for B in B_views]))
+        P, D, Q = tf.linalg.svd(int_U)
+        return tf.Variable(tf.sqrt(N)*tf.matmul(P, tf.transpose(Q)))
+
     def loss(self, final1, final2):
         init1 = self.inital1
         init2 = self.inital2
 
-        U = self.update_U()
+        self.U = self.update_U([self.B_1, self.B_2], 1)
 
         lambda_reg = tf.constant(0.1, dtype=tf.float64)
-        arg1 = tf.Variable(U - tf.matmul(self.B_1, self.weights1), dtype=tf.float64)
-        arg2 = tf.Variable(U - tf.matmul(self.B_2, self.weights2), dtype=tf.float64)
+        arg1 = tf.Variable(self.U - tf.matmul(self.B_1, self.weights1), dtype=tf.float64)
+        arg2 = tf.Variable(self.U - tf.matmul(self.B_2, self.weights2), dtype=tf.float64)
         args = [arg1, arg2]
         tmp_loss1 = [tf.math.reduce_euclidean_norm(arg) ** 2 for arg in args]
         tmp_loss1 = tf.math.reduce_sum(tf.Variable(tmp_loss1, dtype=tf.float64))

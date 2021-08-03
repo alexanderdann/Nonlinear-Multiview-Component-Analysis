@@ -1,6 +1,6 @@
 import tensorflow as tf
 import numpy as np
-from models import MiniMaxCCA, Decoder, Encoder, DeepAutoencoder, CCA
+from models import CCA
 import time
 import os
 from TwoChannelModel import *
@@ -24,8 +24,7 @@ X, Y, S_x, S_y, created_rhos = TwoChannelModel(path, 1000, 5, 2, 3, 'Parabola', 
 
 CCA(X, Y, 3)
 
-def trainModel(epochs, batch_size, shared_dim, private_dim, stages):
-    DAE =
+
 
 
 
