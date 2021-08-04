@@ -95,8 +95,6 @@ class TwoChannelModel():
 
         self.created_rhos = self._PCC(self.S_x, self.S_y)
 
-        print("Generated Signal of Dimensions {0} X {1} \n".format(len(X), len(X[0])))
-
         if nonlinearTr == True:
             _sigmoid = lambda x: np.array([1/(1 + np.exp(-x_i)) for x_i in x])
 
@@ -146,6 +144,9 @@ class TwoChannelModel():
         plt.savefig(full_path)
         plt.show(block=False)
         plt.close('all')
+
+        print("Generated Signal of Dimensions {0} X {1} \n".format(len(self.X), len(self.X[0])))
+
 
 
 
