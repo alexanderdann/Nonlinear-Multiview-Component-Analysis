@@ -22,8 +22,7 @@ z_dim = 2
 c_dim = 3
 num_views = 2
 
-encoder_dims = [(1, None), (5, 'relu'), (7, 'relu')]
-decoder_dims = [(7, 'relu'), (5, 'relu'), (1, None)]
+autoencoder_dims = [(1, None), (256, 'relu'), (256, 'relu'), (1, 'relu')]
 
 # Choose Parabola or Gaussian for relationship between the latent sources
 # If transformation = True => Y = g(As) where g is a non-linear function
@@ -55,13 +54,9 @@ def train_neutral_network(num_views, encoder_dims, decoder_dims):
             )
 
             chunkY = tf.reshape(
-                tf.transpose(batched_X[batch_idx])[ind],
+                tf.transpose(batched_Y[batch_idx])[ind],
                 [batch_length, 1]
             )
-
-            #assert chunkX.shape[0] == 1
-            assert encoder_dims[-1][0] == decoder_dims[0][0]
-            assert encoder_dims[0][0] == decoder_dims[-1][0] == 1
 
             NN = NonlinearComponentAnalysis(num_views=num_views,
                                        encoder_layers=encoder_dims,
@@ -69,9 +64,23 @@ def train_neutral_network(num_views, encoder_dims, decoder_dims):
                                        )
 
             with tf.GradientTape() as tape:
-                output_1 = NN.model1(chunkX, training=True)
-                output_2 = NN.model2(chunkY, training=True)
-                loss_value = NN.loss(output_1, output_2, chunkX, chunkY)
+                print(chunkX)
+                enc_output_1 = NN.model1_enc(chunkX, training=True)
+                enc_output_2 = NN.model2_enc(chunkY, training=True)
+
+                print(f' ENCODER : {enc_output_2}')
+
+                dec_output_1 = NN.model1_dec(enc_output_1, training=True)
+                dec_output_2 = NN.model2_dec(enc_output_2, training=True)
+
+                print(f' DECODER OUTPUT : {enc_output_2}')
+
+                loss_value = NN.loss(enc_output_1,
+                                     enc_output_2,
+                                     dec_output_1,
+                                     dec_output_2,
+                                     chunkX,
+                                     chunkY)
 
             grads1 = tape.gradient(loss_value, NN.model1.trainable_variables)
             NN.optimizer1.apply_gradients(zip(grads1, NN.model1.trainable_variables))
@@ -81,7 +90,7 @@ def train_neutral_network(num_views, encoder_dims, decoder_dims):
 
 
 
-train_neutral_network(num_views=num_views, encoder_dims=encoder_dims, decoder_dims=decoder_dims)
+train_neutral_network(num_views=num_views, encoder_dims=autoencoder_dims, decoder_dims=autoencoder_dims)
 
 
 

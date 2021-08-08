@@ -23,14 +23,16 @@ class CCA():
         return (self.A, self.B), (self.epsilon, self.omega, self.ccor)
 
     def _calculate(self, view1, view2):
-        V1 = tf.constant(view1, dtype=tf.float64)
-        V2 = tf.constant(view2, dtype=tf.float64)
+        V1 = tf.constant(view1, dtype=tf.float32)
+        V2 = tf.constant(view2, dtype=tf.float32)
 
         r1 = 1e-2
         r2 = 1e-2
 
+        print(f'V1: {V1.shape}')
+
         assert V1.shape[0] == V2.shape[0]
-        M = tf.constant(V1.shape[0], dtype=tf.float64)
+        M = tf.constant(V1.shape[0], dtype=tf.float32)
         meanV1 = tf.reduce_mean(V1, axis=0, keepdims=True)
         meanV2 = tf.reduce_mean(V2, axis=0, keepdims=True)
 
@@ -67,113 +69,98 @@ class NonlinearComponentAnalysis(tf.keras.Model):
     def __init__(self, num_views, encoder_layers, decoder_layers):
         super(NonlinearComponentAnalysis, self).__init__()
         self.num_views = num_views
-        self.gamma_t = tf.Variable(0.1, tf.float32)
+        self.gamma_t = tf.Variable(10**-3, tf.float32)
         self.U = 0
         self.optimizer1 = tf.keras.optimizers.Adam(learning_rate=self.gamma_t)
         self.optimizer2 = tf.keras.optimizers.Adam(learning_rate=self.gamma_t)
 
-        self.model1, self.model2 = self._build(encoder_layers, decoder_layers)
+        # Implementatio only for 2 views for now
+        assert num_views == 2
+
+        self.model1_enc, self.model1_dec = self._build(encoder_layers, decoder_layers, 'One')
+        self.model2_enc, self.model2_dec = self._build(encoder_layers, decoder_layers, 'Two')
 
         print('Input Layer is there, but TF does not show it in the summary.\n')
         print('Summaries of the models are following...')
-        self.model1.summary()
-        self.model2.summary()
+        self.model1_enc.summary()
+        self.model1_dec.summary()
 
-        self.model1.compile(optimizer='adam')
-        self.model2.compile(optimizer='adam')
+        self.model2_enc.summary()
+        self.model2_dec.summary()
 
-    def _build(self, encoder_layers, decoder_layers):
-        model_view1 = tf.keras.Sequential(
+        self._compile([self.model1_enc, self.model1_dec, self.model2_enc, self.model2_dec])
+
+    def _compile(self, models):
+        for model in models:
+            model.compile(optimizer='adam', loss=self.loss)
+
+    def _build(self, encoder_layers, decoder_layers, view_ind):
+        name = 'Model_' + view_ind + '_Encoder'
+        model1 = tf.keras.Sequential(
             tf.keras.layers.InputLayer(input_shape=(encoder_layers[0][0],), name='Input_Layer_Model_1'),
-            name='First_Model'
+            name=name
         )
 
-        # self.enc_name1 will automatically save the name for the last layer of the
-        # Encoder -> Needed for CCA
         for counter, encoder_info in enumerate(encoder_layers[1:], 1):
-            self.enc_name1 = f'M1_Encoder_{counter}'
+            self.enc_name = name + f'_{counter}'
             print(encoder_info[0])
-            model_view1.add(
-                tf.keras.layers.Dense(encoder_info[0], activation=encoder_info[1], name=self.enc_name1)
+            model1.add(
+                tf.keras.layers.Dense(encoder_info[0], activation=encoder_info[1], name=self.enc_name)
             )
 
-        model_view2 = tf.keras.Sequential(
-            tf.keras.layers.InputLayer(input_shape=(encoder_layers[0][0],), name='Input_Layer_Model_2'),
-            name='Second Model'
+        name = 'Model_' + view_ind + '_Decoder'
+        model2 = tf.keras.Sequential(
+            tf.keras.layers.InputLayer(input_shape=(decoder_layers[0][0],), name='Input_Layer_Model_2'),
+            name=name
         )
 
-        # self.enc_name2 will automatically save the name for the last layer of the
-        # Encoder -> Needed for CCA
-        for counter, encoder_info in enumerate(encoder_layers[1:], 1):
-            self.enc_name2 = f'M2_Encoder_{counter}'
-            model_view2.add(
-                tf.keras.layers.Dense(encoder_info[0], activation=encoder_info[1], name=self.enc_name2)
+        for counter, decoder_info in enumerate(decoder_layers[1:], 1):
+            self.dec_name = name + f'_{counter}'
+            model2.add(
+                tf.keras.layers.Dense(decoder_info[0], activation=decoder_info[1], name=self.dec_name)
             )
 
+        return model1, model2
 
-        for counter, decoder_info in enumerate(decoder_layers, 1):
-            name = f'M1_Decoder_{counter}'
-            model_view1.add(
-                tf.keras.layers.Dense(decoder_info[0], activation=decoder_info[1], name=name)
-            )
-
-        for counter, decoder_info in enumerate(decoder_layers, 1):
-            name = f'M2_Decoder_{counter}'
-            model_view2.add(
-                tf.keras.layers.Dense(decoder_info[0], activation=decoder_info[1], name=name)
-            )
-
-        return model_view1, model_view2
-
-
-    def encode(self, input):
-        shared_components, private_components = [], []
-        for view in range(self.num_views):
-            shared, private = self.Encoders[view](input[view])
-            shared_components.append(shared)
-            private_components.append(private)
-
-        return shared_components, private_components
-
-    def decode(self, shared, private):
-        reconstructed = []
-        for view in range(self.num_views):
-            tmp = self.Decoders[view](shared[view], private[view])
-            reconstructed.append(tmp)
-
-        return reconstructed
-
-    def get_B(self):
-        # Get intermediate representations to calculate CCA
-        self.layer1 = self.model1.get_layer(name=self.enc_name1).get_weights()[0]
-        self.layer2 = self.model2.get_layer(name=self.enc_name2).get_weights()[0]
-
-        #self.layer1 = self.model1.get_layer(name=self.enc_name1).output
-        #self.layer2 = self.model2.get_layer(name=self.enc_name2).output
+    def get_B(self, est_view1, est_view2):
         # returns (A, B) (epsilon, omega, canonical_correlations)
         # Where A and B are the transformation matrices to achieve
         # canonical variables epsilon and omega, as well as the
         # canonical correlations
-        t_matrices, self.trash = CCA(self.layer1, self.layer2).getitems()
+        t_matrices, _ = CCA(est_view1, est_view2).getitems()
 
         # To keep notation similar as in the paper
         B_1 = t_matrices[0]
         B_2 = t_matrices[1]
 
+        print(f'---- {B_1} -----')
+
         return B_1, B_2
 
     def update_U(self, B_views, N):
         dim = B_views[0].shape[1]
-        print(dim)
-        W = tf.eye(dim, dim) - tf.matmul(tf.ones([dim, dim]), tf.transpose(tf.ones([dim, dim])))
-        print(f'W: {W}')
-        print(f'B: {B_views[0]}')
-        int_U = tf.reduce_sum(tf.constant([tf.matmul(B, W) for B in B_views]))
+        N = 1024
+        print(N)
+        # In this case now dim = 1 what means that W will be zero
+        W = tf.eye(dim, dim) - tf.matmul(tf.ones([dim, dim]), tf.transpose(tf.ones([dim, dim])))/N
+        print(f'W: {W[0]}')
+        print(f'B: {B_views[0][0]}')
+        try:
+            # If B and W are matrices/vectors
+            int_U = tf.reduce_sum(tf.constant([tf.matmul(B, W) for B in B_views]))
+        except:
+            # If B and W are scalars
+            int_U = tf.reduce_sum([tf.tensordot(B[0], W[0], axes=0) for B in B_views])
+
+        print(B_views[0])
+        print(B_views[1])
+        print(f'Intermediate U: {int_U}\n')
+
         P, D, Q = tf.linalg.svd(int_U)
         return tf.Variable(tf.sqrt(N)*tf.matmul(P, tf.transpose(Q)))
 
-    def loss(self, final1, final2, init1, init2):
-        B_1, B_2 = self.get_B()
+    def loss(self, enc1, enc2, dec1, dec2, init1, init2):
+        B_1, B_2 = self.get_B(enc1, enc2)
         self.U = self.update_U([B_1, B_2], 1)
 
         lambda_reg = tf.constant(0.1, dtype=tf.float64)
@@ -183,8 +170,8 @@ class NonlinearComponentAnalysis(tf.keras.Model):
         tmp_loss1 = [tf.math.reduce_euclidean_norm(arg) ** 2 for arg in args]
         tmp_loss1 = tf.math.reduce_sum(tf.Variable(tmp_loss1, dtype=tf.float64))
 
-        reg_args = [tf.Variable(init1 - final1, dtype=tf.float64),
-                    tf.Variable(init2 - final2, dtype=tf.float64)]
+        reg_args = [tf.Variable(init1 - dec1, dtype=tf.float64),
+                    tf.Variable(init2 - dec2, dtype=tf.float64)]
         tmp_loss2 = [tf.math.reduce_euclidean_norm(arg) ** 2 for arg in reg_args]
         tmp_loss2 = lambda_reg * tf.math.reduce_sum(tf.Variable(tmp_loss2, dtype=tf.float64))
 
