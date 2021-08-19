@@ -13,6 +13,11 @@ def BatchPreparation(batch_size, samples, data):
 
     return tf.constant(batched_data, name='Batched Data')
 
+<<<<<<< HEAD
+=======
+
+
+>>>>>>> 4b68bd16612bfab632388e50b0545c7ee678521f
 class CCA():
     def __init__(self, view1, view2):
         self.A, self.B, self.epsilon, self.omega, self.ccor = self._calculate(view1, view2)
@@ -48,7 +53,10 @@ class CCA():
         Sigma22_root_inv_T = tf.transpose(Sigma22_root_inv)
 
         C = tf.linalg.matmul(tf.linalg.matmul(Sigma11_root_inv, Sigma12), Sigma22_root_inv_T)
+<<<<<<< HEAD
         print(f'C Shape: {C.shape}\nC val: {C}')
+=======
+>>>>>>> 4b68bd16612bfab632388e50b0545c7ee678521f
         D, U, V = tf.linalg.svd(C, full_matrices=True)
 
         print(f'U: {U.shape} S: {Sigma11_root_inv.shape}')
@@ -65,7 +73,11 @@ class CCA():
 
 
 class NonlinearComponentAnalysis(tf.keras.Model):
+<<<<<<< HEAD
     def __init__(self, num_views, num_channels, encoder_layers, decoder_layers, batch_size):
+=======
+    def __init__(self, num_views, encoder_layers, decoder_layers):
+>>>>>>> 4b68bd16612bfab632388e50b0545c7ee678521f
         super(NonlinearComponentAnalysis, self).__init__()
         self.num_views = num_views
         self.gamma_t = tf.Variable(10**-3, tf.float32)
@@ -73,6 +85,7 @@ class NonlinearComponentAnalysis(tf.keras.Model):
         self.optimizer1 = tf.keras.optimizers.Adam(learning_rate=self.gamma_t)
         self.optimizer2 = tf.keras.optimizers.Adam(learning_rate=self.gamma_t)
 
+<<<<<<< HEAD
         # Implementation only for 2 views for now
         assert num_views == 2
 
@@ -166,6 +179,55 @@ class NonlinearComponentAnalysis(tf.keras.Model):
                 final_output_dec = input
 
         return initial_input_enc, (final_output_enc, final_output_dec)
+=======
+        # Implementatio only for 2 views for now
+        assert num_views == 2
+
+        self.model1_enc, self.model1_dec = self._build(encoder_layers, decoder_layers, 'One')
+        self.model2_enc, self.model2_dec = self._build(encoder_layers, decoder_layers, 'Two')
+
+        print('Input Layer is there, but TF does not show it in the summary.\n')
+        print('Summaries of the models are following...')
+        self.model1_enc.summary()
+        self.model1_dec.summary()
+
+        self.model2_enc.summary()
+        self.model2_dec.summary()
+
+        self._compile([self.model1_enc, self.model1_dec, self.model2_enc, self.model2_dec])
+
+    def _compile(self, models):
+        for model in models:
+            model.compile(optimizer='adam', loss=self.loss)
+
+    def _build(self, encoder_layers, decoder_layers, view_ind):
+        name = 'Model_' + view_ind + '_Encoder'
+        model1 = tf.keras.Sequential(
+            tf.keras.layers.InputLayer(input_shape=(encoder_layers[0][0],), name='Input_Layer_Model_1'),
+            name=name
+        )
+
+        for counter, encoder_info in enumerate(encoder_layers[1:], 1):
+            self.enc_name = name + f'_{counter}'
+            print(encoder_info[0])
+            model1.add(
+                tf.keras.layers.Dense(encoder_info[0], activation=encoder_info[1], name=self.enc_name)
+            )
+
+        name = 'Model_' + view_ind + '_Decoder'
+        model2 = tf.keras.Sequential(
+            tf.keras.layers.InputLayer(input_shape=(decoder_layers[0][0],), name='Input_Layer_Model_2'),
+            name=name
+        )
+
+        for counter, decoder_info in enumerate(decoder_layers[1:], 1):
+            self.dec_name = name + f'_{counter}'
+            model2.add(
+                tf.keras.layers.Dense(decoder_info[0], activation=decoder_info[1], name=self.dec_name)
+            )
+
+        return model1, model2
+>>>>>>> 4b68bd16612bfab632388e50b0545c7ee678521f
 
     def get_B(self, est_view1, est_view2):
         # returns (A, B) (epsilon, omega, canonical_correlations)
@@ -205,6 +267,7 @@ class NonlinearComponentAnalysis(tf.keras.Model):
         return tf.Variable(tf.sqrt(N)*tf.matmul(P, tf.transpose(Q)))
 
     def loss(self, enc1, enc2, dec1, dec2, init1, init2):
+<<<<<<< HEAD
         def wrapped_loss():
             print('HELLO')
             print(enc1)
@@ -227,3 +290,22 @@ class NonlinearComponentAnalysis(tf.keras.Model):
             final_loss = tmp_loss1 + tmp_loss2
             return final_loss
         return wrapped_loss
+=======
+        B_1, B_2 = self.get_B(enc1, enc2)
+        self.U = self.update_U([B_1, B_2], 1)
+
+        lambda_reg = tf.constant(0.1, dtype=tf.float64)
+        arg1 = tf.Variable(self.U - tf.matmul(self.B_1, self.weights1), dtype=tf.float64)
+        arg2 = tf.Variable(self.U - tf.matmul(self.B_2, self.weights2), dtype=tf.float64)
+        args = [arg1, arg2]
+        tmp_loss1 = [tf.math.reduce_euclidean_norm(arg) ** 2 for arg in args]
+        tmp_loss1 = tf.math.reduce_sum(tf.Variable(tmp_loss1, dtype=tf.float64))
+
+        reg_args = [tf.Variable(init1 - dec1, dtype=tf.float64),
+                    tf.Variable(init2 - dec2, dtype=tf.float64)]
+        tmp_loss2 = [tf.math.reduce_euclidean_norm(arg) ** 2 for arg in reg_args]
+        tmp_loss2 = lambda_reg * tf.math.reduce_sum(tf.Variable(tmp_loss2, dtype=tf.float64))
+
+        final_loss = tmp_loss1 + tmp_loss2
+        return final_loss
+>>>>>>> 4b68bd16612bfab632388e50b0545c7ee678521f
