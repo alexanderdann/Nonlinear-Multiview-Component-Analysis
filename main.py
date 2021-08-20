@@ -75,15 +75,15 @@ def train_neutral_network(epochs, num_views, num_channels, encoder_dims, decoder
                 output_of_encoders, output_of_decoders = NCA_Model(sliced_data)
                 print(tf.shape(output_of_encoders))
                 print(tf.shape(output_of_decoders[0][0]))
-                loss1 = NCA_Class.loss(output_of_encoders[0][0], output_of_encoders[1][0],
+                c_loss = NCA_Class.loss(output_of_encoders[0][0], output_of_encoders[1][0],
                                       output_of_decoders[0][0], output_of_decoders[1][0],
                                       chunkX, chunkY)
-                loss = NCA_Class.mse(output_of_encoders[0][0], output_of_encoders[1][0])
-                print(f'WOHFGI {tf.shape(loss)}')
-                print(f'Lossy {tf.shape(loss1)}')
+                tf_loss = NCA_Class.mse(output_of_encoders[0][0], output_of_encoders[1][0])
+                print(f'Custom: {tf.shape(c_loss)}')
+                print(f'tf.keras.losses: {tf.shape(tf_loss)}')
 
 
-            gradients = tape.gradient(loss1, NCA_Model.trainable_variables)
+            gradients = tape.gradient(tf_loss, NCA_Model.trainable_variables)
             #print(f'--{[var.name for var in tape.watched_variables()]}--')
             #print(f'Gradients: {gradients}')
             NCA_Class.optimizer.apply_gradients(zip(gradients, NCA_Model.trainable_variables))
