@@ -22,8 +22,8 @@ class CCA():
         return (self.A, self.B), (self.epsilon, self.omega, self.ccor)
 
     def _calculate(self, view1, view2):
-        V1 = tf.constant(view1, dtype=tf.float32)
-        V2 = tf.constant(view2, dtype=tf.float32)
+        V1 = tf.cast(view1, dtype=tf.float32)
+        V2 = tf.cast(view2, dtype=tf.float32)
 
         r1 = 1e-2
         r2 = 1e-2
@@ -125,16 +125,7 @@ class NonlinearComponentAnalysis(tf.keras.Model):
 
         print(f'Summary following...\n')
         model.summary()
-
-        #custom_loss = tf.add(tf.keras.losses.mse(self.encoders_outs[0], self.encoders_outs[1]),
-        #                     tf.keras.losses.mse(self.decoders_outs[0], self.decoders_outs[1]))
-        # Dummy Numpy arrays as inputs
-        #custom_loss = self.compute_loss_grads(self.encoders_outs[0], self.encoders_outs[1],
-        #                        self.decoders_outs[0], self.decoders_outs[1],
-        #                        self.view_input[0], self.view_input[1],
-        #                        )
-        #model.add_loss(lambda: custom_loss)
-        model.compile(optimizer='adam')
+        model.compile()
 
         return model
 
@@ -191,7 +182,6 @@ class NonlinearComponentAnalysis(tf.keras.Model):
         dim = B_views[0].shape[1]
         N = tf.constant(1024, dtype=tf.float32)
         print(N)
-        # In this case now dim = 1 what means that W will be zero
         W = tf.eye(dim, dim) - tf.matmul(tf.ones([dim, dim]), tf.transpose(tf.ones([dim, dim])))/N
         print(f'W Shape: {tf.shape(W)}')
         print(f'B Shape: {tf.shape(B_views)}')
@@ -209,22 +199,31 @@ class NonlinearComponentAnalysis(tf.keras.Model):
             input1 = tf.cast(init1, dtype=tf.float32)
             input2 = tf.cast(init2, dtype=tf.float32)
 
-            B_1, B_2 = self.get_B(enc1, enc2)
+            encoder1 = tf.cast(enc1, dtype=tf.float32)
+            encoder2 = tf.cast(enc2, dtype=tf.float32)
+
+            decoder1 = tf.cast(dec1, dtype=tf.float32)
+            decoder2 = tf.cast(dec2, dtype=tf.float32)
+
+            B_1, B_2 = self.get_B(encoder1, encoder2)
             self.U = self.update_U([B_1, B_2], 1)
 
+            print(tf.shape(self.U))
             lambda_reg = tf.constant(0.1, dtype=tf.float32)
-            arg1 = tf.Variable(self.U - tf.matmul(B_1, B_1), dtype=tf.float32)
-            arg2 = tf.Variable(self.U - tf.matmul(B_2, B_2), dtype=tf.float32)
+            # problem with dimensions
+            # 3x3 - 3x3 * 3*64
+            arg1 = self.U - tf.matmul(B_1, tf.transpose(input1))
+            arg2 = self.U - tf.matmul(B_2, tf.transpose(input2))
             args = [arg1, arg2]
             tmp_loss1 = [tf.math.reduce_euclidean_norm(arg) ** 2 for arg in args]
-            tmp_loss1 = tf.math.reduce_sum(tf.Variable(tmp_loss1, dtype=tf.float32))
+            loss1 = tf.math.reduce_sum(tmp_loss1)
 
-            reg_args = [tf.Variable(tf.subtract(input1, dec1), dtype=tf.float32),
-                        tf.Variable(tf.subtract(input2, dec2), dtype=tf.float32)]
+            reg_args = [tf.subtract(input1, decoder1),
+                        tf.subtract(input2, decoder2)]
             tmp_loss2 = [tf.math.reduce_euclidean_norm(arg) ** 2 for arg in reg_args]
-            tmp_loss2 = lambda_reg * tf.math.reduce_sum(tf.Variable(tmp_loss2, dtype=tf.float32))
+            loss2 = lambda_reg * tf.math.reduce_sum(tmp_loss2)
 
-            final_loss = tmp_loss1 + tmp_loss2
+            final_loss = loss1 + loss2
 
             print(f'Loss: {final_loss}')
             return final_loss

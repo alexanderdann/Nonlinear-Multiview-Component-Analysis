@@ -83,7 +83,7 @@ def train_neutral_network(epochs, num_views, num_channels, encoder_dims, decoder
                 print(f'tf.keras.losses: {tf.shape(tf_loss)}')
 
 
-            gradients = tape.gradient(tf_loss, NCA_Model.trainable_variables)
+            gradients = tape.gradient(c_loss, NCA_Model.trainable_variables)
             #print(f'--{[var.name for var in tape.watched_variables()]}--')
             #print(f'Gradients: {gradients}')
             NCA_Class.optimizer.apply_gradients(zip(gradients, NCA_Model.trainable_variables))
