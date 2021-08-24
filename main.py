@@ -38,7 +38,7 @@ X, Y, S_x, S_y, created_rhos = TwoChannelModel(
     rhos=rhos).getitems()
 
 
-def train_neutral_network(epochs, num_views, num_channels, encoder_dims, decoder_dims):
+def train_neutral_network(epochs, num_views, num_channels, encoder_dims, decoder_dims, samples):
     batched_X = BatchPreparation(batch_size=batch_size, samples=samples, data=X)
     batched_Y = BatchPreparation(batch_size=batch_size, samples=samples, data=Y)
     assert tf.shape(batched_X)[2] == tf.shape(batched_Y)[2]
@@ -77,7 +77,7 @@ def train_neutral_network(epochs, num_views, num_channels, encoder_dims, decoder
                 print(tf.shape(output_of_decoders[0][0]))
                 c_loss = NCA_Class.loss(output_of_encoders[0][0], output_of_encoders[1][0],
                                       output_of_decoders[0][0], output_of_decoders[1][0],
-                                      chunkX, chunkY)
+                                      chunkX, chunkY, batch_size)
                 tf_loss = NCA_Class.mse(output_of_encoders[0][0], output_of_encoders[1][0])
                 print(f'Custom: {tf.shape(c_loss)}')
                 print(f'tf.keras.losses: {tf.shape(tf_loss)}')
@@ -97,7 +97,8 @@ train_neutral_network(
     num_views=num_views,
     num_channels=z_dim+c_dim,
     encoder_dims=autoencoder_dims,
-    decoder_dims=autoencoder_dims)
+    decoder_dims=autoencoder_dims,
+    samples=samples)
 
 
 

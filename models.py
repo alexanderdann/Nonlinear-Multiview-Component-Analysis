@@ -54,11 +54,11 @@ class CCA():
 
         print(f'U: {U.shape} S: {Sigma11_root_inv.shape}')
 
-        A = tf.tensordot(tf.transpose(U), Sigma11_root_inv, axes=1)
-        B = tf.tensordot(tf.transpose(V), Sigma22_root_inv, axes=1)
+        A = tf.matmul(tf.transpose(U), Sigma11_root_inv)
+        B = tf.matmul(tf.transpose(V), Sigma22_root_inv)
 
-        epsilon = tf.tensordot(A, tf.transpose(V1_bar), axes=1)
-        omega = tf.tensordot(B, tf.transpose(V2_bar), axes=1)
+        epsilon = tf.matmul(A, tf.transpose(V1_bar))
+        omega = tf.matmul(B, tf.transpose(V2_bar))
 
         print("Canonical Correlations: " + str(D))
 
@@ -178,24 +178,25 @@ class NonlinearComponentAnalysis(tf.keras.Model):
 
         return B_1, B_2
 
-    def update_U(self, B_views, N):
+    def update_U(self, B_views, batch_size):
         dim = B_views[0].shape[1]
-        N = tf.constant(1024, dtype=tf.float32)
-        print(N)
-        W = tf.eye(dim, dim) - tf.matmul(tf.ones([dim, dim]), tf.transpose(tf.ones([dim, dim])))/N
+        I_t = tf.cast(batch_size, dtype=tf.float32)
+        W = tf.eye(dim, dim) - tf.matmul(tf.ones([dim, dim]), tf.transpose(tf.ones([dim, dim])))/I_t
+
         print(f'W Shape: {tf.shape(W)}')
         print(f'B Shape: {tf.shape(B_views)}')
 
-        tmp = [tf.matmul(B, W) for B in B_views]
-        int_U = tf.add(tmp[0], tmp[1])
-        print(f'Intermediate U: {int_U}\n')
+        assert tf.shape(B_views)[0] == 2
+        B_Q = tf.add(B_views[0], B_views[1])
+        int_U = tf.matmul(B_Q, W)
+
+        print(f'\nIntermediate U:\n{int_U}\n')
 
         D, P, Q = tf.linalg.svd(int_U, full_matrices=True)
-        print(f'P_ {tf.shape(P)}')
 
-        return tf.Variable(tf.sqrt(N)*tf.matmul(P, tf.transpose(Q)))
+        return tf.Variable(tf.sqrt(I_t)*tf.matmul(P, tf.transpose(Q)))
 
-    def loss(self, enc1, enc2, dec1, dec2, init1, init2):
+    def loss(self, enc1, enc2, dec1, dec2, init1, init2, batch_size):
             input1 = tf.cast(init1, dtype=tf.float32)
             input2 = tf.cast(init2, dtype=tf.float32)
 
@@ -206,14 +207,15 @@ class NonlinearComponentAnalysis(tf.keras.Model):
             decoder2 = tf.cast(dec2, dtype=tf.float32)
 
             B_1, B_2 = self.get_B(encoder1, encoder2)
-            self.U = self.update_U([B_1, B_2], 1)
+            self.U = self.update_U([B_1, B_2], batch_size)
 
             print(tf.shape(self.U))
             lambda_reg = tf.constant(0.1, dtype=tf.float32)
             # problem with dimensions
             # 3x3 - 3x3 * 3*64
-            arg1 = self.U - tf.matmul(B_1, tf.transpose(input1))
-            arg2 = self.U - tf.matmul(B_2, tf.transpose(input2))
+            print(f'Encoder Shape {tf.shape(self.U)}')
+            arg1 = self.U - tf.matmul(B_1, encoder1)
+            arg2 = self.U - tf.matmul(B_2, encoder2)
             args = [arg1, arg2]
             tmp_loss1 = [tf.math.reduce_euclidean_norm(arg) ** 2 for arg in args]
             loss1 = tf.math.reduce_sum(tmp_loss1)
