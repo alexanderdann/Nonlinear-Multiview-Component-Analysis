@@ -221,8 +221,6 @@ class TwoChannelModel():
                 break
 
         views_concat = np.concatenate([view1, view2], axis=0)
-        print(f'Concat shape {views_concat.shape}')
         final_data = np.array([views_concat[i, :][None] for i in range(2 * data_dim)])
-        print(f'final shape {final_data.shape}')
 
         return final_data, test_sample

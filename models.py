@@ -1,7 +1,6 @@
 import tensorflow as tf
 import visualkeras
 import numpy as np
-from CustomizedLayers import GradientReversal, Flatten3D, Unflatten3D
 
 
 def BatchPreparation(batch_size, samples, data):
@@ -29,8 +28,6 @@ class CCA():
         r1 = 1e-2
         r2 = 1e-2
 
-        print(f'V1: {V1.shape}\n')
-
         assert V1.shape[0] == V2.shape[0]
         M = tf.constant(V1.shape[0], dtype=tf.float32)
         meanV1 = tf.reduce_mean(V1, axis=0, keepdims=True)
@@ -38,8 +35,6 @@ class CCA():
 
         V1_bar = V1 - tf.tile(meanV1, [M, 1])
         V2_bar = V2 - tf.tile(meanV2, [M, 1])
-
-        print(f'V1_Bar: {V1_bar.shape}\n')
 
         Sigma12 = (tf.linalg.matmul(tf.transpose(V1_bar), V2_bar)) / (M - 1)
         Sigma11 = (tf.linalg.matmul(tf.transpose(V1_bar), V1_bar) + r1 * np.eye(V1.shape[1])) / (M - 1)
@@ -50,7 +45,7 @@ class CCA():
         Sigma22_root_inv_T = tf.transpose(Sigma22_root_inv)
 
         C = tf.linalg.matmul(tf.linalg.matmul(Sigma11_root_inv, Sigma12), Sigma22_root_inv_T)
-        print(f'C Shape: {C.shape}\n\nC values: {C}\n')
+        #print(f'C Shape: {C.shape}\n\nC values: {C}\n')
         D, U, V = tf.linalg.svd(C, full_matrices=True)
 
         A = tf.matmul(tf.transpose(U), Sigma11_root_inv)
@@ -104,7 +99,6 @@ class NonlinearComponentAnalysis(tf.keras.Model):
             self.channel_encoders_out, self.channel_decoders_out = [], []
 
             for channel in range(num_channels):
-                #name = f'View_{view}_Channel_{channel}'
                 input, outputs = self._buildSeq(encoder_layers, decoder_layers, channel, view, batch_size)
                 self.view_input.append(input)
                 self.channel_encoders_out.append(outputs[0])
@@ -144,8 +138,6 @@ class NonlinearComponentAnalysis(tf.keras.Model):
 
                 final_output_enc = input
 
-        #initial_input_dec = tf.keras.Input(shape=(decoder_layers[0][0]),
-        #                                   name=f'View_{v_ind}_Input_Decoder_Layer_Channel_{ch_ind}')
         final_output_dec = 0
         for counter, decoder_info in enumerate(decoder_layers[1:], 0):
             name = f'View_{v_ind}_Decoder_Layer_{counter}_Channel_{ch_ind}'
@@ -176,8 +168,8 @@ class NonlinearComponentAnalysis(tf.keras.Model):
         return B_1, B_2
 
     def update_U(self, B_views, batch_size, encoder_data):
-        print(f'B Shape: {tf.shape(B_views)}')
-        print(f'Encoder Shape: {tf.shape(encoder_data[0])}')
+        #print(f'\nB Shape: {tf.shape(B_views)}')
+        #print(f'Encoder Shape: {tf.shape(encoder_data[0])}\n')
 
         dim = encoder_data[0].shape[0]
         n_views = tf.shape(B_views)[0]
@@ -191,12 +183,10 @@ class NonlinearComponentAnalysis(tf.keras.Model):
 
         int_U = tf.matmul(Z, W)
 
-        print(f'\nIntermediate U:\n{tf.shape(int_U)}\n')
-
         D, P, Q = tf.linalg.svd(int_U, full_matrices=False)
 
         # singular values - left singular vectors - right singular vectors
-        print(f'{tf.shape(D)} - {tf.shape(P)} - {tf.shape(Q)}')
+        # print(f'{tf.shape(D)} - {tf.shape(P)} - {tf.shape(Q)}')
 
         return tf.sqrt(I_t)*tf.matmul(P, tf.transpose(Q))
 
@@ -213,11 +203,8 @@ class NonlinearComponentAnalysis(tf.keras.Model):
             B_1, B_2 = self.get_B(encoder1, encoder2)
             self.U = self.update_U([B_1, B_2], batch_size, [encoder1, encoder2])
 
-            print(tf.shape(self.U))
             lambda_reg = tf.constant(0.1, dtype=tf.float32)
-            # problem with dimensions
-            # 3x3 - 3x3 * 3*64
-            print(f'Encoder Shape {tf.shape(self.U)}')
+
             arg1 = self.U - tf.matmul(B_1, tf.transpose(encoder1))
             arg2 = self.U - tf.matmul(B_2, tf.transpose(encoder2))
             args = [arg1, arg2]

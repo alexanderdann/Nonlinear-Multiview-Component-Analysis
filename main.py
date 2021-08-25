@@ -19,12 +19,12 @@ except:
     pass
 
 rhos = [0.9, 0.75, 0.0]
-batch_size = 1024
+batch_size = 128
 samples = 1024
 z_dim = 2
 c_dim = 3
 num_views = 2
-epochs = 5
+epochs = 1000
 
 assert z_dim == 2
 
@@ -79,6 +79,8 @@ def train_neutral_network(epochs, num_views, num_channels, encoder_dims, decoder
             with tf.GradientTape() as tape:
                 tape.watch(sliced_data)
                 output_of_encoders, output_of_decoders = NCA_Model(sliced_data)
+                print(f'O1 {output_of_encoders[0]}')
+                print(f'O2 {output_of_encoders[1]}')
                 c_loss = NCA_Class.loss(output_of_encoders[0][0], output_of_encoders[1][0],
                                       output_of_decoders[0][0], output_of_decoders[1][0],
                                       chunkX, chunkY, batch_size)
