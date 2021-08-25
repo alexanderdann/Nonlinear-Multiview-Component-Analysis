@@ -22,13 +22,14 @@ class CCA():
         return (self.A, self.B), (self.epsilon, self.omega, self.ccor)
 
     def _calculate(self, view1, view2):
+        print('--- CCA Start ---\n\n')
         V1 = tf.cast(view1, dtype=tf.float32)
         V2 = tf.cast(view2, dtype=tf.float32)
 
         r1 = 1e-2
         r2 = 1e-2
 
-        print(f'V1: {V1.shape}')
+        print(f'V1: {V1.shape}\n')
 
         assert V1.shape[0] == V2.shape[0]
         M = tf.constant(V1.shape[0], dtype=tf.float32)
@@ -38,7 +39,7 @@ class CCA():
         V1_bar = V1 - tf.tile(meanV1, [M, 1])
         V2_bar = V2 - tf.tile(meanV2, [M, 1])
 
-        print(f'V1_Bar: {V1_bar.shape}')
+        print(f'V1_Bar: {V1_bar.shape}\n')
 
         Sigma12 = (tf.linalg.matmul(tf.transpose(V1_bar), V2_bar)) / (M - 1)
         Sigma11 = (tf.linalg.matmul(tf.transpose(V1_bar), V1_bar) + r1 * np.eye(V1.shape[1])) / (M - 1)
@@ -49,10 +50,8 @@ class CCA():
         Sigma22_root_inv_T = tf.transpose(Sigma22_root_inv)
 
         C = tf.linalg.matmul(tf.linalg.matmul(Sigma11_root_inv, Sigma12), Sigma22_root_inv_T)
-        print(f'C Shape: {C.shape}\nC val: {C}')
+        print(f'C Shape: {C.shape}\n\nC values: {C}\n')
         D, U, V = tf.linalg.svd(C, full_matrices=True)
-
-        print(f'U: {U.shape} S: {Sigma11_root_inv.shape}')
 
         A = tf.matmul(tf.transpose(U), Sigma11_root_inv)
         B = tf.matmul(tf.transpose(V), Sigma22_root_inv)
@@ -61,7 +60,7 @@ class CCA():
         omega = tf.matmul(B, tf.transpose(V2_bar))
 
         print("Canonical Correlations: " + str(D))
-
+        print('\n\n--- CCA End ---')
         return A, B, epsilon, omega, D
 
 
@@ -174,27 +173,32 @@ class NonlinearComponentAnalysis(tf.keras.Model):
         B_1 = t_matrices[0]
         B_2 = t_matrices[1]
 
-        print(f'---- {B_1} -----')
-
         return B_1, B_2
 
-    def update_U(self, B_views, batch_size):
-        dim = B_views[0].shape[1]
+    def update_U(self, B_views, batch_size, encoder_data):
+        print(f'B Shape: {tf.shape(B_views)}')
+        print(f'Encoder Shape: {tf.shape(encoder_data[0])}')
+
+        dim = encoder_data[0].shape[0]
+        n_views = tf.shape(B_views)[0]
+        half = tf.constant(0.5, dtype=tf.float32)
         I_t = tf.cast(batch_size, dtype=tf.float32)
         W = tf.eye(dim, dim) - tf.matmul(tf.ones([dim, dim]), tf.transpose(tf.ones([dim, dim])))/I_t
 
-        print(f'W Shape: {tf.shape(W)}')
-        print(f'B Shape: {tf.shape(B_views)}')
+        assert n_views == 2
+        int_Z = [half*tf.matmul(B_views[i], tf.transpose(encoder_data[i])) for i in range(n_views)]
+        Z = tf.add(int_Z[0], int_Z[1])
 
-        assert tf.shape(B_views)[0] == 2
-        B_Q = tf.add(B_views[0], B_views[1])
-        int_U = tf.matmul(B_Q, W)
+        int_U = tf.matmul(Z, W)
 
-        print(f'\nIntermediate U:\n{int_U}\n')
+        print(f'\nIntermediate U:\n{tf.shape(int_U)}\n')
 
-        D, P, Q = tf.linalg.svd(int_U, full_matrices=True)
+        D, P, Q = tf.linalg.svd(int_U, full_matrices=False)
 
-        return tf.Variable(tf.sqrt(I_t)*tf.matmul(P, tf.transpose(Q)))
+        # singular values - left singular vectors - right singular vectors
+        print(f'{tf.shape(D)} - {tf.shape(P)} - {tf.shape(Q)}')
+
+        return tf.sqrt(I_t)*tf.matmul(P, tf.transpose(Q))
 
     def loss(self, enc1, enc2, dec1, dec2, init1, init2, batch_size):
             input1 = tf.cast(init1, dtype=tf.float32)
@@ -207,15 +211,15 @@ class NonlinearComponentAnalysis(tf.keras.Model):
             decoder2 = tf.cast(dec2, dtype=tf.float32)
 
             B_1, B_2 = self.get_B(encoder1, encoder2)
-            self.U = self.update_U([B_1, B_2], batch_size)
+            self.U = self.update_U([B_1, B_2], batch_size, [encoder1, encoder2])
 
             print(tf.shape(self.U))
             lambda_reg = tf.constant(0.1, dtype=tf.float32)
             # problem with dimensions
             # 3x3 - 3x3 * 3*64
             print(f'Encoder Shape {tf.shape(self.U)}')
-            arg1 = self.U - tf.matmul(B_1, encoder1)
-            arg2 = self.U - tf.matmul(B_2, encoder2)
+            arg1 = self.U - tf.matmul(B_1, tf.transpose(encoder1))
+            arg2 = self.U - tf.matmul(B_2, tf.transpose(encoder2))
             args = [arg1, arg2]
             tmp_loss1 = [tf.math.reduce_euclidean_norm(arg) ** 2 for arg in args]
             loss1 = tf.math.reduce_sum(tmp_loss1)
@@ -227,5 +231,5 @@ class NonlinearComponentAnalysis(tf.keras.Model):
 
             final_loss = loss1 + loss2
 
-            print(f'Loss: {final_loss}')
+            print(f'\n######## Loss: {final_loss} ########\n')
             return final_loss
