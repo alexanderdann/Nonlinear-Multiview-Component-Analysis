@@ -76,8 +76,15 @@ class TwoChannelModel():
 
             repr1, repr2 = self._gen_parabola(observations)
 
-            shared_x = np.tile(repr1, (shared_dim, 1))
-            shared_y = np.tile(repr2, (shared_dim, 1))
+            shared_x = np.array([repr1, repr2])
+            shared_y = np.array(shared_x)
+            #shared_x = np.tile(repr1, (shared_dim, 1))
+            #shared_y = np.tile(repr2, (shared_dim, 1))
+
+            plt.scatter(shared_x[0], shared_x[1])
+            plt.xlabel('$\mathrm{dimension1}$', fontsize='18')
+            plt.ylabel('$\mathrm{dimension2}$', fontsize='18')
+            plt.show()
 
             private_x = np.random.random((private_dim, repr1.shape[0]))
             private_y = np.random.random((private_dim, repr2.shape[0]))
@@ -138,7 +145,7 @@ class TwoChannelModel():
         # legend = plt.scatter(self.TC_x, self.test, c='black', marker='.')
         # legend.set_label('rhos=[0.95, 0.95, 0.95]')
         # plt.legend()
-        plt.xlim(-10, 10)
+        plt.xlim(-5, 5)
         plt.tight_layout()
         full_path = self.path + '/' + 'GENSIG.png'
         plt.savefig(full_path)
@@ -146,9 +153,6 @@ class TwoChannelModel():
         plt.close('all')
 
         print("Generated Signal of Dimensions {0} X {1} \n".format(len(self.X), len(self.X[0])))
-
-
-
 
     def _PCC(self, TC_x, TC_y):
         calc_cov = []
@@ -177,10 +181,5 @@ class TwoChannelModel():
     def _gen_parabola(self, observations):
         x = np.linspace(-1, 1, observations)
         f_x = x**2
-
-        plt.scatter(x, f_x)
-        plt.xlabel('$\mathrm{x}$', fontsize='18')
-        plt.ylabel('$\mathrm{f(x)}$', fontsize='18')
-        plt.show()
 
         return x, f_x

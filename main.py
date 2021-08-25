@@ -20,12 +20,14 @@ except:
 rhos = [0.9, 0.75, 0.0]
 batch_size = 1024
 samples = 1024
-z_dim = 1
-c_dim = 2
+z_dim = 2
+c_dim = 3
 num_views = 2
-epochs = 50
+epochs = 10
 
-autoencoder_dims = [(1, None), (256, 'relu'), (256, 'relu'), (256, 'relu'), (1, 'relu')]
+assert z_dim == 2
+
+autoencoder_dims = [(1, None), (256, 'relu'), (1, 'relu')]
 
 # Choose Parabola or Gaussian for relationship between the latent sources
 # If transformation = True => Y = g(As) where g is a non-linear function
@@ -52,7 +54,7 @@ X, Y, S_x, S_y, created_rhos = TwoChannelModel(
 #result = CCA(X1, Y1).getitems()
 
 
-def train_neutral_network(epochs, num_views, num_channels, encoder_dims, decoder_dims, samples):
+def train_neutral_network(epochs, num_views, num_channels, encoder_dims, decoder_dims, samples, plot_path):
     batched_X = BatchPreparation(batch_size=batch_size, samples=samples, data=X)
     batched_Y = BatchPreparation(batch_size=batch_size, samples=samples, data=Y)
     assert tf.shape(batched_X)[2] == tf.shape(batched_Y)[2]
@@ -75,7 +77,6 @@ def train_neutral_network(epochs, num_views, num_channels, encoder_dims, decoder
     for batch_idx in range(batch_dims):
         chunkX = batched_X[batch_idx]
         chunkY = batched_Y[batch_idx]
-
 
         chunkXandY = tf.concat([chunkX, chunkY], 1)
         print(f'\n\nDimensions of the Input Data: {tf.shape(chunkXandY[None])}\n')
@@ -112,39 +113,65 @@ def train_neutral_network(epochs, num_views, num_channels, encoder_dims, decoder
     aa = [dd[i][None] for i in range(2 * data_dim)]
     output_of_encoders, output_of_decoders = NCA_Model(aa)
 
-    fig, axes = plt.subplots(num_channels, num_views)
+    fig, axes = plt.subplots(num_channels, num_views, figsize=(6, 9))
     for c in range(num_channels):
         for v in range(num_views):
-            axes[c, v].title.set_text(f'View {v} Channel: {c}')
-            axes[c, v].plot(test_sample, output_of_decoders[v][0][:,c])
+            axes[c, v].title.set_text(f'$View {v} Channel {c}$')
+            Xd = np.copy(test_sample)
+            Yd = np.copy(test_sample)
+            _sigmoid = lambda x: np.array([1 / (1 + np.exp(-x_i)) for x_i in x])
+
+            i=c
+            if i == 0:
+                Xd = 3 * _sigmoid(Xd) + 0.1 * Xd
+                Yd = 5 * np.tanh(Yd) + 0.2 * Yd
+            elif i == 1:
+                Xd = 5 * _sigmoid(Xd) + 0.2 * Xd
+                Yd = 2 * np.tanh(Yd) + 0.1 * Yd
+            elif i == 2:
+                Xd = 0.2 * np.exp(Xd)
+                Yd = 0.1 * Yd ** 3 + Yd
+            elif i == 3:
+                Xd = -4 * _sigmoid(Xd) - 0.3 * Xd
+                Yd = -5 * np.tanh(Yd) - 0.4 * Yd
+            elif i == 4:
+                Xd = -3 * _sigmoid(Xd) + 0.2 * Xd
+                Yd = -6 * np.tanh(Yd) - 0.3 * Yd
+            else:
+                break
+
+            if v == 0:
+                axes[c, v].plot(test_sample, Xd, label=r'$\mathrm{g}$')
+                res = [output_of_encoders[v][0][:, c].numpy()[i] * Xd[i] for i in range(len(test_sample))]
+                axes[c, v].plot(test_sample, res, label=r'$\mathrm{f}\circledast\mathrm{g}$')
+            elif v == 1:
+                axes[c, v].plot(test_sample, Yd, label=r'$\mathrm{g}$')
+                res = [output_of_encoders[v][0][:, c].numpy()[i] * Yd[i] for i in range(len(test_sample))]
+                axes[c, v].plot(test_sample, res, label=r'$\mathrm{f}\circledast\mathrm{g}$')
+
+            axes[c, v].plot(test_sample, output_of_encoders[v][0][:,c].numpy(), label=r'$\mathrm{f}$')
+            axes[c, v].legend()
             plt.tight_layout()
-    full_path = path + '/' + f'{epochs}_Epochs.png'
+            print([i==0 for i in output_of_encoders[v][0][:,c]])
+            print(f'{v} {c}: {output_of_encoders[v][0][:,c]}')
+            print(f'{v} {c}: {output_of_decoders[v][0][:, c]}')
+
+    full_path = path + '/' + plot_path + f'_{epochs}_Epochs.png'
     plt.savefig(full_path)
     plt.show()
 
 
 
-for avg in range(30):
-    spath = path + f'/Run {avg}'
-    try:
-        os.makedirs(spath)
-        print(f'Path: {spath} exists: {os.path.exists(spath)}\n\n')
-    except:
-        pass
+for it in range(1):
+    path_add = f'Iteration_{it}'
     train_neutral_network(
         epochs=epochs,
         num_views=num_views,
         num_channels=z_dim+c_dim,
         encoder_dims=autoencoder_dims,
         decoder_dims=autoencoder_dims,
-        samples=samples)
-
-
-
-
-
-
-
+        samples=samples,
+        plot_path=path_add)
 
 if __name__ == '__main__':
     print(tf.version)
