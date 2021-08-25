@@ -22,7 +22,7 @@ class CCA():
         return (self.A, self.B), (self.epsilon, self.omega, self.ccor)
 
     def _calculate(self, view1, view2):
-        print('--- CCA Start ---\n\n')
+        print('\n\n\n--------- CCA Start ---------\n\n')
         V1 = tf.cast(view1, dtype=tf.float32)
         V2 = tf.cast(view2, dtype=tf.float32)
 
@@ -60,7 +60,7 @@ class CCA():
         omega = tf.matmul(B, tf.transpose(V2_bar))
 
         print("Canonical Correlations: " + str(D))
-        print('\n\n--- CCA End ---')
+        print('\n\n--------- CCA End ---------')
         return A, B, epsilon, omega, D
 
 

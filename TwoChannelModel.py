@@ -22,6 +22,10 @@ class TwoChannelModel():
         print("Number of Analyzed Brain Regions: " + str(len(self.S_x[0])))
         print("Number of Observations: " + str(len(self.S_x)) + "\n")
 
+    def eval(self, batch_size, num_channels, data_dim, t_min=-10, t_max=10):
+        self.eval_data, self.test_sample = self._create_evaluation_data(batch_size, num_channels, data_dim, t_min=-10, t_max=10)
+        return self.eval_data, self.test_sample
+
     def getitems(self):
         return self.X, self.Y, self.S_x, self.S_y, self.created_rhos
 
@@ -183,3 +187,42 @@ class TwoChannelModel():
         f_x = x**2
 
         return x, f_x
+
+    def _create_evaluation_data(self, batch_size, num_channels, data_dim, t_min=-10, t_max=10):
+        test_sample = np.linspace(t_min, t_max, batch_size)
+        tile_dim = [data_dim, 1]
+        view1 = np.tile(np.copy(test_sample[None]), tile_dim)
+        view2 = np.tile(np.copy(test_sample[None]), tile_dim)
+
+        _sigmoid = lambda x: np.array([1 / (1 + np.exp(-x_i)) for x_i in x])
+
+        for i in range(num_channels):
+            if i == 0:
+                view1[i] = 3 * _sigmoid(view1[i]) + 0.1 * view1[i]
+                view2[i] = 5 * np.tanh(view2[i]) + 0.2 * view2[i]
+
+            elif i == 1:
+                view1[i] = 5 * _sigmoid(view1[i]) + 0.2 * view1[i]
+                view2[i] = 2 * np.tanh(view2[i]) + 0.1 * view2[i]
+
+            elif i == 2:
+                view1[i] = 0.2 * np.exp(view1[i])
+                view2[i] = 0.1 * view2[i] ** 3 + view2[i]
+
+            elif i == 3:
+                view1[i] = -4 * _sigmoid(view1[i]) - 0.3 * view1[i]
+                view2[i] = -5 * np.tanh(view2[i]) - 0.4 * view2[i]
+
+            elif i == 4:
+                view1[i] = -3 * _sigmoid(view1[i]) - 0.2 * view1[i]
+                view2[i] = -6 * np.tanh(view2[i]) - 0.3 * view2[i]
+
+            else:
+                break
+
+        views_concat = np.concatenate([view1, view2], axis=0)
+        print(f'Concat shape {views_concat.shape}')
+        final_data = np.array([views_concat[i, :][None] for i in range(2 * data_dim)])
+        print(f'final shape {final_data.shape}')
+
+        return final_data, test_sample
