@@ -19,16 +19,16 @@ except:
     pass
 
 rhos = [0.9, 0.75, 0.0]
-batch_size = 128
+batch_size = 64
 samples = 1024
 z_dim = 2
 c_dim = 3
 num_views = 2
-epochs = 100
+epochs = 300
 
 assert z_dim == 2
 
-autoencoder_dims = [(1, None), (256, 'relu'), (1, 'relu')]
+autoencoder_dims = [(1, None), (256, 'relu'), (1, None)]
 
 # Choose Parabola or Gaussian for relationship between the latent sources
 # If transformation = True => Y = g(As) where g is a non-linear function
@@ -71,7 +71,7 @@ def train_neutral_network(epochs, num_views, num_channels, encoder_dims, decoder
         chunkXandY = tf.concat([chunkX, chunkY], 1)
         print(f'\n\nDimensions of the Input Data: {tf.shape(chunkXandY[None])}\n')
         sliced_data = [chunkXandY[:, i][None] for i in range(2*data_dim)]
-        print(tf.shape(sliced_data))
+        print(sliced_data)
 
         for epoch in range(epochs):
             print(f'######## Batch {batch_idx+1}/{batch_dims} ########')
@@ -79,8 +79,6 @@ def train_neutral_network(epochs, num_views, num_channels, encoder_dims, decoder
             with tf.GradientTape() as tape:
                 tape.watch(sliced_data)
                 output_of_encoders, output_of_decoders = NCA_Model(sliced_data)
-                print(f'O1 {output_of_encoders[0]}')
-                print(f'O2 {output_of_encoders[1]}')
                 c_loss = NCA_Class.loss(output_of_encoders[0][0], output_of_encoders[1][0],
                                       output_of_decoders[0][0], output_of_decoders[1][0],
                                       chunkX, chunkY, batch_size)
