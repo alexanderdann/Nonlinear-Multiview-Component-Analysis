@@ -24,7 +24,7 @@ samples = 1024
 z_dim = 2
 c_dim = 3
 num_views = 2
-epochs = 1000
+epochs = 100
 
 assert z_dim == 2
 
@@ -84,11 +84,15 @@ def train_neutral_network(epochs, num_views, num_channels, encoder_dims, decoder
                 c_loss = NCA_Class.loss(output_of_encoders[0][0], output_of_encoders[1][0],
                                       output_of_decoders[0][0], output_of_decoders[1][0],
                                       chunkX, chunkY, batch_size)
+                loss_arr.append(c_loss)
 
             gradients = tape.gradient(c_loss, NCA_Model.trainable_variables)
 
             NCA_Class.optimizer.apply_gradients(zip(gradients, NCA_Model.trainable_variables))
 
+    plt.plot(np.squeeze([np.linspace(0, len(loss_arr)-1, len(loss_arr))]), loss_arr)
+    plt.title(r'Loss')
+    plt.show()
     eval_data_np, test_sample = TCM.eval(batch_size, num_channels, data_dim)
     eval_data_tf = tf.convert_to_tensor(eval_data_np, dtype=tf.float32)
     output_of_encoders, output_of_decoders = NCA_Model([eval_data_tf[i] for i in range(2*data_dim)])
