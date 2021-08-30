@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
 from numpy.random import default_rng
-
+np.random.seed(3333)
 sns.set()
 sns.set_style('white')
 sns.set_context('paper')
@@ -51,8 +51,8 @@ class TwoChannelModel():
             self.A_y[i] = self.mv_samples[i][1]
 
         if mode == 'Gaussian':
-            self.mix1 = 'Gaussian'
-            self.mix2 = 'Gaussian'
+            self.mix = 'Gaussian'
+
 
             assert len(rhos) == shared_dim + private_dim
 
@@ -75,13 +75,12 @@ class TwoChannelModel():
                 self.S_y.T[i] = self.mv_samples[i][1]
 
         elif mode == 'Parabola':
-            self.mix1 = 'Linear'
-            self.mix2 = 'Parabola'
+            self.mix = 'Parabola'
 
             repr1, repr2 = self._gen_parabola(observations)
 
             shared_x = np.array([repr1, repr2])
-            shared_y = np.array(shared_x)
+            shared_y = np.copy(shared_x)
             #shared_x = np.tile(repr1, (shared_dim, 1))
             #shared_y = np.tile(repr2, (shared_dim, 1))
 
@@ -132,7 +131,7 @@ class TwoChannelModel():
                 else:
                     break
 
-        mix = self.mix1 + ' and ' + self.mix2
+        mix = self.mix
 
         self.X = X.T
         self.Y = Y.T
@@ -193,8 +192,7 @@ class TwoChannelModel():
         test_sample = np.linspace(t_min, t_max, batch_size)
         tile_dim = [data_dim, 1]
         view1 = np.tile(np.copy(test_sample[None]), tile_dim)
-        view2 = np.tile(np.copy(test_sample[None]), tile_dim)
-
+        view2 = np.copy(view1)
         _sigmoid = lambda x: np.array([1 / (1 + np.exp(-x_i)) for x_i in x])
 
         for i in range(num_channels):

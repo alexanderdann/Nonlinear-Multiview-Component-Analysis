@@ -159,11 +159,13 @@ class NonlinearComponentAnalysis(tf.keras.Model):
         # Where A and B are the transformation matrices to achieve
         # canonical variables epsilon and omega, as well as the
         # canonical correlations
-        t_matrices, _ = CCA(est_view1, est_view2).getitems()
+        t_matrices, cca_data = CCA(est_view1, est_view2).getitems()
 
         # To keep notation similar as in the paper
         B_1 = t_matrices[0]
         B_2 = t_matrices[1]
+
+        self.est_sources = (cca_data[0], cca_data[1])
 
         return B_1, B_2
 

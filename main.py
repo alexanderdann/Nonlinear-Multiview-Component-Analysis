@@ -19,16 +19,16 @@ except:
     pass
 
 rhos = [0.9, 0.75, 0.0]
-batch_size = 64
+batch_size = 1024
 samples = 1024
 z_dim = 2
 c_dim = 3
 num_views = 2
-epochs = 300
+epochs = 1000
 
 assert z_dim == 2
 
-autoencoder_dims = [(1, None), (256, 'relu'), (1, None)]
+autoencoder_dims = [(1, 'relu'), (256, None), (1, None)]
 
 # Choose Parabola or Gaussian for relationship between the latent sources
 # If transformation = True => Y = g(As) where g is a non-linear function
@@ -112,6 +112,15 @@ def train_neutral_network(epochs, num_views, num_channels, encoder_dims, decoder
     full_path = path + '/' + plot_path + f'_{epochs}_Epochs.png'
     plt.savefig(full_path)
     plt.show()
+
+    plt.scatter(NCA_Class.est_sources[0][0], NCA_Class.est_sources[0][1])
+    plt.title(r'Estimated Sources 1')
+    plt.show()
+
+    plt.scatter(NCA_Class.est_sources[1][0], NCA_Class.est_sources[1][1])
+    plt.title(r'Estimated Sources 1')
+    plt.show()
+    print(f'ALEXANDER {NCA_Class.est_sources}')
 
 
 
