@@ -30,15 +30,14 @@ class CCA():
 
         assert V1.shape[0] == V2.shape[0]
         M = tf.constant(V1.shape[0], dtype=tf.float32)
-        meanV1 = tf.reduce_mean(V1, axis=0, keepdims=True)
-        meanV2 = tf.reduce_mean(V2, axis=0, keepdims=True)
+        ddim = tf.constant(V1.shape[1], dtype=tf.int16)
 
-        V1_bar = V1 - tf.tile(meanV1, [M, 1])
-        V2_bar = V2 - tf.tile(meanV2, [M, 1])
+        V1_bar = V1 - tf.matmul(V1, tf.ones(shape=[ddim, ddim]))  # tf.tile(meanV1, [M, 1])
+        V2_bar = V2 - tf.matmul(V2, tf.ones(shape=[ddim, ddim]))  # tf.tile(meanV2, [M, 1])
 
-        Sigma12 = (tf.linalg.matmul(tf.transpose(V1_bar), V2_bar)) / (M - 1)
-        Sigma11 = (tf.linalg.matmul(tf.transpose(V1_bar), V1_bar) + r1 * np.eye(V1.shape[1])) / (M - 1)
-        Sigma22 = (tf.linalg.matmul(tf.transpose(V2_bar), V2_bar) + r2 * np.eye(V2.shape[1])) / (M - 1)
+        Sigma12 = tf.linalg.matmul(tf.transpose(V1_bar), V2_bar) / (M - 1)
+        Sigma11 = tf.linalg.matmul(tf.transpose(V1_bar), V1_bar) / (M - 1) + r1 * tf.eye(ddim)
+        Sigma22 = tf.linalg.matmul(tf.transpose(V2_bar), V2_bar) / (M - 1) + r2 * tf.eye(ddim)
 
         Sigma11_root_inv = tf.linalg.sqrtm(tf.linalg.inv(Sigma11))
         Sigma22_root_inv = tf.linalg.sqrtm(tf.linalg.inv(Sigma22))
