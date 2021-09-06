@@ -1,5 +1,6 @@
 import tensorflow as tf
 import numpy as np
+import visualkeras
 from models import BatchPreparation, NonlinearComponentAnalysis, CCA
 import matplotlib.pyplot as plt
 import time
@@ -24,7 +25,7 @@ samples = 1024
 z_dim = 2
 c_dim = 3
 num_views = 2
-epochs = 1000
+epochs = 500
 
 assert z_dim == 2
 
@@ -44,7 +45,7 @@ TCM = TwoChannelModel(
 
 X, Y, S_x, S_y, created_rhos = TCM.getitems()
 
-def train_neutral_network(epochs, num_views, num_channels, encoder_dims, decoder_dims, samples, plot_path):
+def train_neutral_network(epochs, num_views, num_channels, encoder_dims, decoder_dims, samples, plot_path, shared_dim):
     batched_X = BatchPreparation(batch_size=batch_size, samples=samples, data=X)
     batched_Y = BatchPreparation(batch_size=batch_size, samples=samples, data=Y)
     assert tf.shape(batched_X)[2] == tf.shape(batched_Y)[2]
@@ -81,7 +82,7 @@ def train_neutral_network(epochs, num_views, num_channels, encoder_dims, decoder
                 output_of_encoders, output_of_decoders = NCA_Model(sliced_data)
                 c_loss = NCA_Class.loss(output_of_encoders[0][0], output_of_encoders[1][0],
                                       output_of_decoders[0][0], output_of_decoders[1][0],
-                                      chunkX, chunkY, batch_size)
+                                      chunkX, chunkY, batch_size, shared_dim)
                 loss_arr.append(c_loss)
 
             gradients = tape.gradient(c_loss, NCA_Model.trainable_variables)
@@ -118,7 +119,7 @@ def train_neutral_network(epochs, num_views, num_channels, encoder_dims, decoder
     plt.show()
 
     plt.scatter(NCA_Class.est_sources[1][0], NCA_Class.est_sources[1][1])
-    plt.title(r'Estimated Sources 1')
+    plt.title(r'Estimated Sources 2')
     plt.show()
     print(f'ALEXANDER {NCA_Class.est_sources}')
 
@@ -133,7 +134,8 @@ for it in range(1):
         encoder_dims=autoencoder_dims,
         decoder_dims=autoencoder_dims,
         samples=samples,
-        plot_path=path_add)
+        plot_path=path_add,
+        shared_dim=z_dim)
 
 if __name__ == '__main__':
     print(tf.version)

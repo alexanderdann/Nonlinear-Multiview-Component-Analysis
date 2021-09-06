@@ -1,5 +1,4 @@
 import tensorflow as tf
-import visualkeras
 import numpy as np
 
 
@@ -14,31 +13,33 @@ def BatchPreparation(batch_size, samples, data):
     return tf.constant(batched_data, name='Batched Data')
 
 class CCA():
-    def __init__(self, view1, view2):
-        self.A, self.B, self.epsilon, self.omega, self.ccor = self._calculate(view1, view2)
+    def __init__(self, view1, view2, shared_dim):
+        self.A, self.B, self.epsilon, self.omega, self.ccor = self._calculate(view1, view2, shared_dim)
 
     def getitems(self):
         return (self.A, self.B), (self.epsilon, self.omega, self.ccor)
 
-    def _calculate(self, view1, view2):
+    def _calculate(self, view1, view2, shared_dim):
         print('\n\n\n--------- CCA Start ---------\n\n')
+
         V1 = tf.cast(view1, dtype=tf.float32)
         V2 = tf.cast(view2, dtype=tf.float32)
 
-        r1 = 1e-2
-        r2 = 1e-2
+        print(tf.shape(V1))
+
+        r1 = 0
+        r2 = 0
 
         assert V1.shape[0] == V2.shape[0]
         M = tf.constant(V1.shape[0], dtype=tf.float32)
-        meanV1 = tf.reduce_mean(V1, axis=0, keepdims=True)
-        meanV2 = tf.reduce_mean(V2, axis=0, keepdims=True)
+        ddim = tf.constant(V1.shape[1], dtype=tf.int16)
 
-        V1_bar = V1 - tf.tile(meanV1, [M, 1])
-        V2_bar = V2 - tf.tile(meanV2, [M, 1])
+        V1_bar = V1 - tf.matmul(V1, tf.ones(shape=[ddim, ddim]))  # tf.tile(meanV1, [M, 1])
+        V2_bar = V2 - tf.matmul(V2, tf.ones(shape=[ddim, ddim]))  # tf.tile(meanV2, [M, 1])
 
-        Sigma12 = (tf.linalg.matmul(tf.transpose(V1_bar), V2_bar)) / (M - 1)
-        Sigma11 = (tf.linalg.matmul(tf.transpose(V1_bar), V1_bar) + r1 * np.eye(V1.shape[1])) / (M - 1)
-        Sigma22 = (tf.linalg.matmul(tf.transpose(V2_bar), V2_bar) + r2 * np.eye(V2.shape[1])) / (M - 1)
+        Sigma12 = tf.linalg.matmul(tf.transpose(V1_bar), V2_bar) / (M - 1)
+        Sigma11 = tf.linalg.matmul(tf.transpose(V1_bar), V1_bar) / (M - 1) + r1 * tf.eye(ddim)
+        Sigma22 = tf.linalg.matmul(tf.transpose(V2_bar), V2_bar) / (M - 1) + r2 * tf.eye(ddim)
 
         Sigma11_root_inv = tf.linalg.sqrtm(tf.linalg.inv(Sigma11))
         Sigma22_root_inv = tf.linalg.sqrtm(tf.linalg.inv(Sigma22))
@@ -56,6 +57,9 @@ class CCA():
 
         print("Canonical Correlations: " + str(D))
         print('\n\n--------- CCA End ---------')
+
+        #print(f'B DIM {tf.shape(epsilon)}')
+
         return A, B, epsilon, omega, D
 
 
@@ -67,7 +71,6 @@ class NonlinearComponentAnalysis(tf.keras.Model):
         self.U = 0
         self.optimizer = tf.keras.optimizers.Adam()
         self.mse = tf.keras.losses.MeanSquaredError()
-
 
         # Implementation only for 2 views for now
         assert num_views == 2
@@ -154,12 +157,12 @@ class NonlinearComponentAnalysis(tf.keras.Model):
 
         return initial_input_enc, (final_output_enc, final_output_dec)
 
-    def get_B(self, est_view1, est_view2):
+    def getCCA(self, est_view1, est_view2, shared_dim):
         # returns (A, B) (epsilon, omega, canonical_correlations)
         # Where A and B are the transformation matrices to achieve
         # canonical variables epsilon and omega, as well as the
         # canonical correlations
-        t_matrices, cca_data = CCA(est_view1, est_view2).getitems()
+        t_matrices, cca_data = CCA(est_view1, est_view2, shared_dim).getitems()
 
         # To keep notation similar as in the paper
         B_1 = t_matrices[0]
@@ -167,7 +170,7 @@ class NonlinearComponentAnalysis(tf.keras.Model):
 
         self.est_sources = (cca_data[0], cca_data[1])
 
-        return B_1, B_2
+        return B_1[:shared_dim], B_2[:shared_dim]
 
     def update_U(self, B_views, batch_size, encoder_data):
         #print(f'\nB Shape: {tf.shape(B_views)}')
@@ -192,33 +195,33 @@ class NonlinearComponentAnalysis(tf.keras.Model):
 
         return tf.sqrt(I_t)*tf.matmul(P, tf.transpose(Q))
 
-    def loss(self, enc1, enc2, dec1, dec2, init1, init2, batch_size):
-            input1 = tf.cast(init1, dtype=tf.float32)
-            input2 = tf.cast(init2, dtype=tf.float32)
+    def loss(self, enc1, enc2, dec1, dec2, init1, init2, batch_size, shared_dim):
+        input1 = tf.cast(init1, dtype=tf.float32)
+        input2 = tf.cast(init2, dtype=tf.float32)
 
-            encoder1 = tf.cast(enc1, dtype=tf.float32)
-            encoder2 = tf.cast(enc2, dtype=tf.float32)
+        encoder1 = tf.cast(enc1, dtype=tf.float32)
+        encoder2 = tf.cast(enc2, dtype=tf.float32)
 
-            decoder1 = tf.cast(dec1, dtype=tf.float32)
-            decoder2 = tf.cast(dec2, dtype=tf.float32)
+        decoder1 = tf.cast(dec1, dtype=tf.float32)
+        decoder2 = tf.cast(dec2, dtype=tf.float32)
 
-            B_1, B_2 = self.get_B(encoder1, encoder2)
-            self.U = self.update_U([B_1, B_2], batch_size, [encoder1, encoder2])
+        B_1, B_2 = self.get_B(encoder1, encoder2, shared_dim)
+        self.U = self.update_U([B_1, B_2], batch_size, [encoder1, encoder2])
 
-            lambda_reg = tf.constant(0.1, dtype=tf.float32)
+        lambda_reg = tf.constant(1, dtype=tf.float32)
 
-            arg1 = self.U - tf.matmul(B_1, tf.transpose(encoder1))
-            arg2 = self.U - tf.matmul(B_2, tf.transpose(encoder2))
-            args = [arg1, arg2]
-            tmp_loss1 = [tf.math.reduce_euclidean_norm(arg) ** 2 for arg in args]
-            loss1 = tf.math.reduce_sum(tmp_loss1)
+        arg1 = self.U# - tf.matmul(B_1, tf.transpose(encoder1))
+        arg2 = self.U# - tf.matmul(B_2, tf.transpose(encoder2))
+        args = [arg1, arg2]
+        tmp_loss1 = [tf.math.reduce_euclidean_norm(arg) ** 2 for arg in args]
+        loss1 = tf.math.reduce_sum(tmp_loss1)
 
-            reg_args = [tf.subtract(input1, decoder1),
-                        tf.subtract(input2, decoder2)]
-            tmp_loss2 = [tf.math.reduce_euclidean_norm(arg) ** 2 for arg in reg_args]
-            loss2 = lambda_reg * tf.math.reduce_sum(tmp_loss2)
+        reg_args = [tf.subtract(input1, decoder1),
+                    tf.subtract(input2, decoder2)]
+        tmp_loss2 = [tf.math.reduce_euclidean_norm(arg) ** 2 for arg in reg_args]
+        loss2 = lambda_reg * tf.math.reduce_sum(tmp_loss2)
 
-            final_loss = loss1 + loss2
+        final_loss = loss1 + loss2
 
-            print(f'\n######## Loss: {final_loss} ########\n')
-            return final_loss
+        print(f'\n######## Loss: {final_loss} ########\n')
+        return final_loss

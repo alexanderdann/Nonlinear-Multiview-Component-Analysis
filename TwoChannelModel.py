@@ -89,8 +89,11 @@ class TwoChannelModel():
             plt.ylabel('$\mathrm{dimension2}$', fontsize='18')
             plt.show()
 
-            private_x = np.random.random((private_dim, repr1.shape[0]))
-            private_y = np.random.random((private_dim, repr2.shape[0]))
+            private_x = np.array([np.random.normal(-.5, 1, observations) for _ in range(3)])
+            private_y = np.array([np.random.normal(.8, 1.5, observations) for _ in range(3)])
+
+            #private_x = np.random.random((private_dim, repr1.shape[0]))
+            #private_y = np.random.random((private_dim, repr2.shape[0]))
 
             self.S_x = np.concatenate([shared_x, private_x], axis=0).T
             self.S_y = np.concatenate([shared_y, private_y], axis=0).T
