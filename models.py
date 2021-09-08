@@ -195,6 +195,26 @@ class NonlinearComponentAnalysis(tf.keras.Model):
 
         return tf.sqrt(I_t)*tf.matmul(P, tf.transpose(Q))
 
+    def update_U_2(self, shared_dim, batch_size):
+        I_t = tf.cast(batch_size, dtype=tf.float32)
+        half = tf.cast(0.5, dtype=tf.float32)
+
+        epsilon = self.est_sources[0]
+        omega = self.est_sources[1]
+
+        dim = tf.shape(epsilon)[1]
+
+        W = tf.eye(dim, dim) - tf.matmul(tf.ones([dim, dim]), tf.transpose(tf.ones([dim, dim]))) / I_t
+        Z = half * tf.add(epsilon, omega)
+        int_U = tf.matmul(Z, W)
+
+        D, P, Q = tf.linalg.svd(int_U, full_matrices=False)
+
+        # singular values - left singular vectors - right singular vectors
+        # print(f'{tf.shape(D)} - {tf.shape(P)} - {tf.shape(Q)}')
+
+        return tf.sqrt(I_t) * tf.matmul(P, tf.transpose(Q))[:shared_dim]
+
     def loss(self, enc1, enc2, dec1, dec2, init1, init2, batch_size, shared_dim):
         input1 = tf.cast(init1, dtype=tf.float32)
         input2 = tf.cast(init2, dtype=tf.float32)
@@ -205,13 +225,14 @@ class NonlinearComponentAnalysis(tf.keras.Model):
         decoder1 = tf.cast(dec1, dtype=tf.float32)
         decoder2 = tf.cast(dec2, dtype=tf.float32)
 
-        B_1, B_2 = self.get_B(encoder1, encoder2, shared_dim)
-        self.U = self.update_U([B_1, B_2], batch_size, [encoder1, encoder2])
+        B_1, B_2 = self.getCCA(encoder1, encoder2, shared_dim)
+        #self.U = self.update_U([B_1, B_2], batch_size, [encoder1, encoder2])
+        self.U = self.update_U_2(shared_dim, batch_size)
 
-        lambda_reg = tf.constant(1, dtype=tf.float32)
+        lambda_reg = tf.constant(0.01, dtype=tf.float32)
 
-        arg1 = self.U# - tf.matmul(B_1, tf.transpose(encoder1))
-        arg2 = self.U# - tf.matmul(B_2, tf.transpose(encoder2))
+        arg1 = self.U - tf.matmul(B_1, tf.transpose(encoder1))
+        arg2 = self.U - tf.matmul(B_2, tf.transpose(encoder2))
         args = [arg1, arg2]
         tmp_loss1 = [tf.math.reduce_euclidean_norm(arg) ** 2 for arg in args]
         loss1 = tf.math.reduce_sum(tmp_loss1)

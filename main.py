@@ -25,11 +25,11 @@ samples = 1024
 z_dim = 2
 c_dim = 3
 num_views = 2
-epochs = 500
+epochs = 1000
 
 assert z_dim == 2
 
-autoencoder_dims = [(1, 'relu'), (256, None), (1, None)]
+autoencoder_dims = [(1, None), (256, 'relu'), (1, None)]
 
 # Choose Parabola or Gaussian for relationship between the latent sources
 # If transformation = True => Y = g(As) where g is a non-linear function
