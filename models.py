@@ -211,7 +211,7 @@ class NonlinearComponentAnalysis(tf.keras.Model):
         B_1, B_2, epsilon, omega = self.getCCA(encoder1, encoder2, shared_dim)
         #self.U = self.update_U([B_1, B_2], batch_size, [encoder1, encoder2])
         #self.U = self.update_U_2(shared_dim, batch_size)
-        Z = epsilon - omega
+        Z = tf.subtract(epsilon, omega)
 
         lambda_reg = tf.constant(0.01, dtype=tf.float32)
 

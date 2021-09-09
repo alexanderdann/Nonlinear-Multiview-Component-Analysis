@@ -137,8 +137,6 @@ class TwoChannelModel():
 
         mix = self.mix
 
-        print(f'X Shape {X.shape}')
-
         plt.rcParams.update({'figure.figsize': (5, 4)})
         # plt.suptitle('Relationship between True Sources $\mathbf{S}_{\mathrm{X}}$ and $\mathbf{S}_{\mathrm{Y}}$', fontweight='bold', fontsize=19)
         title = 'Transformation: ' + mix

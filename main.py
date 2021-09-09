@@ -25,11 +25,10 @@ samples = 1024
 z_dim = 2
 c_dim = 3
 num_views = 2
-epochs = 250
-
+epochs = 500
 assert z_dim == 2
 
-autoencoder_dims = [(1, None), (256, 'elu'), (1, None)]
+autoencoder_dims = [(1, None), (256, 'relu'), (1, None)]
 
 # Choose Parabola or Gaussian for relationship between the latent sources
 # If transformation = True => Y = g(As) where g is a non-linear function
@@ -68,18 +67,11 @@ def train_neutral_network(epochs, num_views, num_channels, encoder_dims, decoder
     for batch_idx in range(batch_dims):
         chunkX = tf.transpose(batched_X[batch_idx])
         chunkY = tf.transpose(batched_Y[batch_idx])
-        print(tf.shape(chunkX))
         chunkXandY = tf.concat([chunkX, chunkY], 1)
-        print(tf.shape(chunkXandY))
-
 
         data_chunk = [chunkXandY[:,i][None] for i in range(2*data_dim)]
         #data_chunk = chunkXandY#[chunkXandY[i][None] for i in range(2*data_dim)]
         print(tf.shape(data_chunk))
-
-
-
-
 
         for epoch in range(epochs):
             print(f'######## Batch {batch_idx+1}/{batch_dims} ########')
@@ -87,8 +79,7 @@ def train_neutral_network(epochs, num_views, num_channels, encoder_dims, decoder
             with tf.GradientTape() as tape:
                 tape.watch(data_chunk)
                 output_of_encoders, output_of_decoders = NCA_Model(data_chunk)
-                print('...')
-                print(tf.shape(output_of_encoders))
+
                 c_loss = NCA_Class.loss(output_of_encoders[0][0], output_of_encoders[1][0],
                                       output_of_decoders[0][0], output_of_decoders[1][0],
                                       chunkX, chunkY, batch_size, shared_dim)
@@ -123,15 +114,18 @@ def train_neutral_network(epochs, num_views, num_channels, encoder_dims, decoder
     plt.savefig(full_path)
     plt.show()
 
-    print(f'test {tf.shape(NCA_Class.est_sources[0][0])}')
     plt.scatter(NCA_Class.est_sources[0][0], NCA_Class.est_sources[0][1])
-    plt.title(r'Estimated Sources 1')
+    plt.ylabel(r'$\hat{\mathbf{\varepsilon}}^({1})$', fontweight='bold', fontsize='18')
+    plt.xlabel(r'$\hat{\mathbf{\varepsilon}}^{(0)}$', fontweight='bold', fontsize='18')
+    plt.title(r'Estimated Sources $\hat{\mathbf{\varepsilon}}$')
     plt.show()
 
     plt.scatter(NCA_Class.est_sources[1][0], NCA_Class.est_sources[1][1])
-    plt.title(r'Estimated Sources 2')
+    plt.ylabel(r'$\hat{\mathbf{\omega}}^{(1)}$', fontweight='bold', fontsize='18')
+    plt.xlabel(r'$\hat\mathbf{\omega}}^{(0)}$', fontweight='bold', fontsize='18')
+    plt.title(r'Estimated Sources $\mathbf{\varepsilon}$')
     plt.show()
-    print(f'ALEXANDER {NCA_Class.est_sources}')
+
 
 
 
