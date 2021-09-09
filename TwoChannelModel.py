@@ -141,8 +141,8 @@ class TwoChannelModel():
         # plt.suptitle('Relationship between True Sources $\mathbf{S}_{\mathrm{X}}$ and $\mathbf{S}_{\mathrm{Y}}$', fontweight='bold', fontsize=19)
         title = 'Transformation: ' + mix
         plt.title(title, fontsize='14')
-        plt.ylabel('$\mathbf{X}$', fontweight='bold', fontsize='18')
-        plt.xlabel('$\mathbf{Y}$', fontweight='bold', fontsize='18')
+        plt.ylabel('$\mathbf{Y}$', fontweight='bold', fontsize='18')
+        plt.xlabel('$\mathbf{X}$', fontweight='bold', fontsize='18')
         legend = plt.scatter(X[0], Y[0], c='black', marker='.')
         # legend.set_label('rhos=[1, 1, 1]')
         # legend = plt.scatter(self.TC_x, self.test, c='black', marker='.')

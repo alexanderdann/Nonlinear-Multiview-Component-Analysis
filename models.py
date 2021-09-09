@@ -71,6 +71,7 @@ class NonlinearComponentAnalysis(tf.keras.Model):
         self.U = 0
         self.optimizer = tf.keras.optimizers.Adam()
         self.mse = tf.keras.losses.MeanSquaredError()
+        self.can_corr = []
 
         # Implementation only for 2 views for now
         assert num_views == 2
@@ -170,6 +171,8 @@ class NonlinearComponentAnalysis(tf.keras.Model):
         B_2 = t_matrices[1]
 
         self.est_sources = (cca_data[0], cca_data[1])
+
+        self.can_corr.append(cca_data[2])
 
 
         return B_1, B_2, cca_data[0], cca_data[1]

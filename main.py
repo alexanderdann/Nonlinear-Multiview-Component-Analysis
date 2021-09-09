@@ -89,7 +89,10 @@ def train_neutral_network(epochs, num_views, num_channels, encoder_dims, decoder
 
             NCA_Class.optimizer.apply_gradients(zip(gradients, NCA_Model.trainable_variables))
 
-    plt.plot(np.squeeze([np.linspace(0, len(loss_arr)-1, len(loss_arr))]), loss_arr)
+
+    # we skip first 20 percent of loss visualisation since it drops very fast and is messing up the plot
+    offset = int(len(loss_arr)*0.2)
+    plt.plot(np.squeeze([np.linspace(offset, len(loss_arr[offset:])-1, len(loss_arr[offset:]))]), loss_arr[offset:])
     plt.title(r'Loss')
     plt.show()
     eval_data_np, test_sample, S_x, S_y = TCM.eval(batch_size, num_channels, data_dim)
@@ -100,33 +103,65 @@ def train_neutral_network(epochs, num_views, num_channels, encoder_dims, decoder
 
     for c in range(num_channels):
         for v in range(num_views):
-            axes[c, v].title.set_text(f'$View {v} Channel {c}$')
+            axes[c, v].title.set_text(f'View {v} Channel {c}')
             axes[c, v].plot(test_sample, output_of_encoders[v][0][:, c].numpy(), label=r'$\mathrm{f}\circledast\mathrm{g}$')
-            #if v == 0:
-            #    axes[c, v].plot(test_sample, np.squeeze(eval_data_np[:5][c]), label=r'$\mathrm{g}$')
-            #elif v == 1:
-            #    axes[c, v].plot(test_sample, np.squeeze(eval_data_np[5:][c]), label=r'$\mathrm{g}$')
+            if v == 0:
+                axes[c, v].plot(test_sample, np.squeeze(eval_data_np[:5][c]), label=r'$\mathrm{g}$')
+            elif v == 1:
+                axes[c, v].plot(test_sample, np.squeeze(eval_data_np[5:][c]), label=r'$\mathrm{g}$')
 
             axes[c, v].legend()
 
     plt.tight_layout()
-    full_path = path + '/' + plot_path + f'_{epochs}_Epochs.png'
-    plt.savefig(full_path)
+    #full_path = path + '/' + plot_path + f'_{epochs}_Epochs.png'
+    #plt.savefig(full_path)
     plt.show()
 
     plt.scatter(NCA_Class.est_sources[0][0], NCA_Class.est_sources[0][1])
-    plt.ylabel(r'$\hat{\mathbf{\varepsilon}}^({1})$', fontweight='bold', fontsize='18')
-    plt.xlabel(r'$\hat{\mathbf{\varepsilon}}^{(0)}$', fontweight='bold', fontsize='18')
-    plt.title(r'Estimated Sources $\hat{\mathbf{\varepsilon}}$')
+    plt.ylabel(r'$\hat{\mathbf{\varepsilon}}^{(1)}$', fontsize='15')
+    plt.xlabel(r'$\hat{\mathbf{\varepsilon}}^{(0)}$', fontsize='15')
+    plt.suptitle(r'Estimated Sources $\hat{\mathbf{\varepsilon}}$', fontsize='18')
+    plt.tight_layout()
     plt.show()
 
     plt.scatter(NCA_Class.est_sources[1][0], NCA_Class.est_sources[1][1])
-    plt.ylabel(r'$\hat{\mathbf{\omega}}^{(1)}$', fontweight='bold', fontsize='18')
-    plt.xlabel(r'$\hat\mathbf{\omega}}^{(0)}$', fontweight='bold', fontsize='18')
-    plt.title(r'Estimated Sources $\mathbf{\varepsilon}$')
+    plt.ylabel(r'$\hat{\mathbf{\omega}}^{(1)}$', fontsize='15')
+    plt.xlabel(r'$\hat{\mathbf{\omega}}^{(0)}$', fontsize='15')
+    plt.suptitle(r'Estimated Sources $\hat{\mathbf{\omega}}$', fontsize='18')
+    plt.tight_layout()
     plt.show()
 
+    x_axis = np.linspace(1, epochs, epochs)
+    corrs = len(NCA_Class.can_corr[0])
+    labels = [r'Correlation $\rho^{('+ str(i+1) +')}$' for i in range(corrs)]
+    plt.plot(x_axis, NCA_Class.can_corr, label=labels)
+    plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.30), ncol=3, fancybox=True, shadow=True)
+    plt.ylabel(r'Canonical Correlation value')
+    plt.xlabel(r'Epochs')
+    plt.xticks([i for i in range(1, epochs+1) if (i % (0.5*epochs) == 0) or (i==1) or (i==epochs)])
+    plt.tight_layout()
+    plt.show()
 
+    fig, axes = plt.subplots(shared_dim, num_views)
+
+    for s in range(shared_dim):
+        for v in range(num_views):
+            if v == 0:
+                axes[s, v].plot(S_x[s], NCA_Class.est_sources[v][s])
+                xlab = '$\mathbf{s}_{\mathrm{X}}^{('+ str(s) +')}$'
+                ylab = r'$\mathbf{\varepsilon}^{('+ str(s) +')}$'
+                axes[s, v].set_xlabel(xlab)
+                axes[s, v].set_ylabel(ylab)
+            elif v == 1:
+                axes[s, v].plot(S_y[s], NCA_Class.est_sources[v][s])
+                xlab = '$\mathbf{s}_{\mathrm{Y}}^{(' + str(s) + ')}$'
+                ylab = r'$\mathbf{\omega}^{(' + str(s) + ')}$'
+                axes[s, v].set_xlabel(xlab)
+                axes[s, v].set_ylabel(ylab)
+
+    plt.suptitle('Relationship between the estimated and true sources')
+    plt.tight_layout()
+    plt.show()
 
 
 for it in range(1):
