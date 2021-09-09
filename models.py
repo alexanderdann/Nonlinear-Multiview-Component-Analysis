@@ -3,12 +3,12 @@ import numpy as np
 
 
 def BatchPreparation(batch_size, samples, data):
-    assert data.shape[0] == samples
+    assert data.shape[1] == samples
+    assert samples % batch_size == 0
 
     batched_data = []
-    data_length = data.shape[0]
-    for ind in range(data_length//batch_size):
-        batched_data.append(data[ind*batch_size: (ind+1)*batch_size])
+    for ind in range(samples//batch_size):
+        batched_data.append(data[:, ind*batch_size: (ind+1)*batch_size])
 
     return tf.constant(batched_data, name='Batched Data')
 
@@ -33,7 +33,7 @@ class CCA():
         assert V1.shape[0] == V2.shape[0]
         M = tf.constant(V1.shape[0], dtype=tf.float32)
         ddim = tf.constant(V1.shape[1], dtype=tf.int16)
-
+        # check mean and variance
         V1_bar = V1 - tf.matmul(V1, tf.ones(shape=[ddim, ddim]))  # tf.tile(meanV1, [M, 1])
         V2_bar = V2 - tf.matmul(V2, tf.ones(shape=[ddim, ddim]))  # tf.tile(meanV2, [M, 1])
 
@@ -49,8 +49,8 @@ class CCA():
         #print(f'C Shape: {C.shape}\n\nC values: {C}\n')
         D, U, V = tf.linalg.svd(C, full_matrices=True)
 
-        A = tf.matmul(tf.transpose(U), Sigma11_root_inv)
-        B = tf.matmul(tf.transpose(V), Sigma22_root_inv)
+        A = tf.matmul(tf.transpose(U)[:shared_dim], Sigma11_root_inv)
+        B = tf.matmul(tf.transpose(V)[:shared_dim], Sigma22_root_inv)
 
         epsilon = tf.matmul(A, tf.transpose(V1_bar))
         omega = tf.matmul(B, tf.transpose(V2_bar))
@@ -110,6 +110,7 @@ class NonlinearComponentAnalysis(tf.keras.Model):
             self.decoders_outs.append(
                 tf.keras.layers.concatenate(self.channel_decoders_out, name=f'View_{view}_Final_Layer')
             )
+
             self.encoders_outs.append(
                 tf.keras.layers.concatenate(self.channel_encoders_out, name=f'View_{view}_Pre_CCA_Layer')
             )
@@ -170,7 +171,8 @@ class NonlinearComponentAnalysis(tf.keras.Model):
 
         self.est_sources = (cca_data[0], cca_data[1])
 
-        return B_1[:shared_dim], B_2[:shared_dim]
+
+        return B_1, B_2, cca_data[0], cca_data[1]
 
     def update_U(self, B_views, batch_size, encoder_data):
         #print(f'\nB Shape: {tf.shape(B_views)}')
@@ -195,25 +197,6 @@ class NonlinearComponentAnalysis(tf.keras.Model):
 
         return tf.sqrt(I_t)*tf.matmul(P, tf.transpose(Q))
 
-    def update_U_2(self, shared_dim, batch_size):
-        I_t = tf.cast(batch_size, dtype=tf.float32)
-        half = tf.cast(0.5, dtype=tf.float32)
-
-        epsilon = self.est_sources[0]
-        omega = self.est_sources[1]
-
-        dim = tf.shape(epsilon)[1]
-
-        W = tf.eye(dim, dim) - tf.matmul(tf.ones([dim, dim]), tf.transpose(tf.ones([dim, dim]))) / I_t
-        Z = half * tf.add(epsilon, omega)
-        int_U = tf.matmul(Z, W)
-
-        D, P, Q = tf.linalg.svd(int_U, full_matrices=False)
-
-        # singular values - left singular vectors - right singular vectors
-        # print(f'{tf.shape(D)} - {tf.shape(P)} - {tf.shape(Q)}')
-
-        return tf.sqrt(I_t) * tf.matmul(P, tf.transpose(Q))[:shared_dim]
 
     def loss(self, enc1, enc2, dec1, dec2, init1, init2, batch_size, shared_dim):
         input1 = tf.cast(init1, dtype=tf.float32)
@@ -225,17 +208,17 @@ class NonlinearComponentAnalysis(tf.keras.Model):
         decoder1 = tf.cast(dec1, dtype=tf.float32)
         decoder2 = tf.cast(dec2, dtype=tf.float32)
 
-        B_1, B_2 = self.getCCA(encoder1, encoder2, shared_dim)
+        B_1, B_2, epsilon, omega = self.getCCA(encoder1, encoder2, shared_dim)
         #self.U = self.update_U([B_1, B_2], batch_size, [encoder1, encoder2])
-        self.U = self.update_U_2(shared_dim, batch_size)
+        #self.U = self.update_U_2(shared_dim, batch_size)
+        Z = epsilon - omega
 
         lambda_reg = tf.constant(0.01, dtype=tf.float32)
 
-        arg1 = self.U - tf.matmul(B_1, tf.transpose(encoder1))
-        arg2 = self.U - tf.matmul(B_2, tf.transpose(encoder2))
-        args = [arg1, arg2]
-        tmp_loss1 = [tf.math.reduce_euclidean_norm(arg) ** 2 for arg in args]
-        loss1 = tf.math.reduce_sum(tmp_loss1)
+        #arg1 = Z - tf.matmul(B_1, tf.transpose(encoder1))
+        #arg2 = Z - tf.matmul(B_2, tf.transpose(encoder2))
+        #args = [arg1, arg2]
+        loss1 = tf.math.reduce_euclidean_norm(Z) ** 2
 
         reg_args = [tf.subtract(input1, decoder1),
                     tf.subtract(input2, decoder2)]

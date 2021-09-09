@@ -25,11 +25,11 @@ samples = 1024
 z_dim = 2
 c_dim = 3
 num_views = 2
-epochs = 1000
+epochs = 250
 
 assert z_dim == 2
 
-autoencoder_dims = [(1, None), (256, 'relu'), (1, None)]
+autoencoder_dims = [(1, None), (256, 'elu'), (1, None)]
 
 # Choose Parabola or Gaussian for relationship between the latent sources
 # If transformation = True => Y = g(As) where g is a non-linear function
@@ -49,10 +49,10 @@ def train_neutral_network(epochs, num_views, num_channels, encoder_dims, decoder
     batched_X = BatchPreparation(batch_size=batch_size, samples=samples, data=X)
     batched_Y = BatchPreparation(batch_size=batch_size, samples=samples, data=Y)
     assert tf.shape(batched_X)[2] == tf.shape(batched_Y)[2]
-    assert batch_size == tf.shape(batched_X)[1]
+    assert batch_size == tf.shape(batched_X)[2]
 
     batch_dims = tf.shape(batched_X)[0]
-    data_dim = tf.shape(batched_X)[2]
+    data_dim = tf.shape(batched_X)[1]
 
     print('--- Information about the intermediate data ---\n')
     print(f'Amount of Batches: {batch_dims}\nBatch Size: {batch_size}\nData Dimension: {data_dim}\n')
@@ -66,20 +66,29 @@ def train_neutral_network(epochs, num_views, num_channels, encoder_dims, decoder
 
     loss_arr = []
     for batch_idx in range(batch_dims):
-        chunkX = batched_X[batch_idx]
-        chunkY = batched_Y[batch_idx]
-
+        chunkX = tf.transpose(batched_X[batch_idx])
+        chunkY = tf.transpose(batched_Y[batch_idx])
+        print(tf.shape(chunkX))
         chunkXandY = tf.concat([chunkX, chunkY], 1)
-        print(f'\n\nDimensions of the Input Data: {tf.shape(chunkXandY[None])}\n')
-        sliced_data = [chunkXandY[:, i][None] for i in range(2*data_dim)]
-        print(sliced_data)
+        print(tf.shape(chunkXandY))
+
+
+        data_chunk = [chunkXandY[:,i][None] for i in range(2*data_dim)]
+        #data_chunk = chunkXandY#[chunkXandY[i][None] for i in range(2*data_dim)]
+        print(tf.shape(data_chunk))
+
+
+
+
 
         for epoch in range(epochs):
             print(f'######## Batch {batch_idx+1}/{batch_dims} ########')
             print(f'######## Epoch {epoch+1}/{epochs} ########')
             with tf.GradientTape() as tape:
-                tape.watch(sliced_data)
-                output_of_encoders, output_of_decoders = NCA_Model(sliced_data)
+                tape.watch(data_chunk)
+                output_of_encoders, output_of_decoders = NCA_Model(data_chunk)
+                print('...')
+                print(tf.shape(output_of_encoders))
                 c_loss = NCA_Class.loss(output_of_encoders[0][0], output_of_encoders[1][0],
                                       output_of_decoders[0][0], output_of_decoders[1][0],
                                       chunkX, chunkY, batch_size, shared_dim)
@@ -92,7 +101,7 @@ def train_neutral_network(epochs, num_views, num_channels, encoder_dims, decoder
     plt.plot(np.squeeze([np.linspace(0, len(loss_arr)-1, len(loss_arr))]), loss_arr)
     plt.title(r'Loss')
     plt.show()
-    eval_data_np, test_sample = TCM.eval(batch_size, num_channels, data_dim)
+    eval_data_np, test_sample, S_x, S_y = TCM.eval(batch_size, num_channels, data_dim)
     eval_data_tf = tf.convert_to_tensor(eval_data_np, dtype=tf.float32)
     output_of_encoders, output_of_decoders = NCA_Model([eval_data_tf[i] for i in range(2*data_dim)])
 
@@ -101,11 +110,11 @@ def train_neutral_network(epochs, num_views, num_channels, encoder_dims, decoder
     for c in range(num_channels):
         for v in range(num_views):
             axes[c, v].title.set_text(f'$View {v} Channel {c}$')
-            axes[c, v].plot(test_sample, output_of_encoders[v][0][:,c].numpy(), label=r'$\mathrm{f}\circledast\mathrm{g}$')
-            if v == 0:
-                axes[c, v].plot(test_sample, np.squeeze(eval_data_np[:5][c]), label=r'$\mathrm{g}$')
-            elif v == 1:
-                axes[c, v].plot(test_sample, np.squeeze(eval_data_np[5:][c]), label=r'$\mathrm{g}$')
+            axes[c, v].plot(test_sample, output_of_encoders[v][0][:, c].numpy(), label=r'$\mathrm{f}\circledast\mathrm{g}$')
+            #if v == 0:
+            #    axes[c, v].plot(test_sample, np.squeeze(eval_data_np[:5][c]), label=r'$\mathrm{g}$')
+            #elif v == 1:
+            #    axes[c, v].plot(test_sample, np.squeeze(eval_data_np[5:][c]), label=r'$\mathrm{g}$')
 
             axes[c, v].legend()
 
@@ -114,6 +123,7 @@ def train_neutral_network(epochs, num_views, num_channels, encoder_dims, decoder
     plt.savefig(full_path)
     plt.show()
 
+    print(f'test {tf.shape(NCA_Class.est_sources[0][0])}')
     plt.scatter(NCA_Class.est_sources[0][0], NCA_Class.est_sources[0][1])
     plt.title(r'Estimated Sources 1')
     plt.show()

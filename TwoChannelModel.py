@@ -16,15 +16,15 @@ class TwoChannelModel():
 
         self._transform(observations, mixing_dim, shared_dim, private_dim, mode, transformation, rhos)
 
-        print("Rows of Spatial Maps: " + str(len(self.A_x)))
-        print("Columns of Spatial Maps: " + str(len(self.A_x[0])) + "\n")
+        print("Rows of Mixing Matrices: " + str(len(self.A_x)))
+        print("Columns of Mixing Matrices: " + str(len(self.A_x[0])) + "\n")
 
-        print("Number of Analyzed Brain Regions: " + str(len(self.S_x[0])))
-        print("Number of Observations: " + str(len(self.S_x)) + "\n")
+        print("Rows of Source Matrices: " + str(len(self.S_x)))
+        print("Columns of Source Matrices: " + str(len(self.S_x[0])) + "\n")
 
     def eval(self, batch_size, num_channels, data_dim, t_min=-10, t_max=10):
-        self.eval_data, self.test_sample = self._create_evaluation_data(batch_size, num_channels, data_dim, t_min=-10, t_max=10)
-        return self.eval_data, self.test_sample
+        self.eval_data, self.test_sample, S_x, S_y = self._create_evaluation_data(batch_size, num_channels, data_dim, t_min=-10, t_max=10)
+        return self.eval_data, self.test_sample, S_y, S_y
 
     def getitems(self):
         return self.X, self.Y, self.S_x, self.S_y, self.created_rhos
@@ -32,9 +32,8 @@ class TwoChannelModel():
     def _transform(self, observations, mixing_dim, shared_dim, private_dim, mode, nonlinearTr, rhos):
         num_comp = shared_dim + private_dim
 
-        self.A_x = np.random.randn(num_comp, mixing_dim)
-        self.A_y = np \
-            .random.randn(num_comp, mixing_dim)
+        self.A_x = np.random.randn(mixing_dim, num_comp)
+        self.A_y = np.random.randn(mixing_dim, num_comp)
 
         self.mv_samples = []
         for num in range(num_comp):
@@ -44,11 +43,13 @@ class TwoChannelModel():
                             [0, 1]])
 
             multivar_sample = np.random.multivariate_normal(mean, cov, size=mixing_dim, check_valid='warn', tol=1e-10)
+
             self.mv_samples.append(multivar_sample.T)
 
+
         for i in range(num_comp):
-            self.A_x[i] = self.mv_samples[i][0]
-            self.A_y[i] = self.mv_samples[i][1]
+            self.A_x[:, i] = self.mv_samples[i][0]
+            self.A_y[:, i] = self.mv_samples[i][1]
 
         if mode == 'Gaussian':
             self.mix = 'Gaussian'
@@ -56,8 +57,8 @@ class TwoChannelModel():
 
             assert len(rhos) == shared_dim + private_dim
 
-            self.S_x = np.random.randn(observations, num_comp)
-            self.S_y = np.random.randn(observations, num_comp)
+            self.S_x = np.random.randn(num_comp, observations)
+            self.S_y = np.random.randn(num_comp, observations)
 
             self.mv_samples = []
             for num in range(len(rhos)):
@@ -71,8 +72,8 @@ class TwoChannelModel():
                 self.mv_samples.append(multivar_sample.T)
 
             for i in range(len(rhos)):
-                self.S_x.T[i] = self.mv_samples[i][0]
-                self.S_y.T[i] = self.mv_samples[i][1]
+                self.S_x[i] = self.mv_samples[i][0]
+                self.S_y[i] = self.mv_samples[i][1]
 
         elif mode == 'Parabola':
             self.mix = 'Parabola'
@@ -95,17 +96,17 @@ class TwoChannelModel():
             #private_x = np.random.random((private_dim, repr1.shape[0]))
             #private_y = np.random.random((private_dim, repr2.shape[0]))
 
-            self.S_x = np.concatenate([shared_x, private_x], axis=0).T
-            self.S_y = np.concatenate([shared_y, private_y], axis=0).T
+            self.S_x = np.concatenate([shared_x, private_x], axis=0)
+            self.S_y = np.concatenate([shared_y, private_y], axis=0)
 
         else:
             print('ERROR\n')
             raise ValueError
 
-        X = np.dot(self.S_x, self.A_x).T
-        Y = np.dot(self.S_y, self.A_y).T
+        X = np.dot(self.A_x, self.S_x)
+        Y = np.dot(self.A_y, self.S_y)
 
-        self.created_rhos = self._PCC(self.S_x, self.S_y)
+        self.created_rhos = self._PCC(self.S_x.T, self.S_y.T)
 
         if nonlinearTr == True:
             _sigmoid = lambda x: np.array([1/(1 + np.exp(-x_i)) for x_i in x])
@@ -136,10 +137,7 @@ class TwoChannelModel():
 
         mix = self.mix
 
-        self.X = X.T
-        self.Y = Y.T
-
-        print(f'X Shape {self.X.shape}')
+        print(f'X Shape {X.shape}')
 
         plt.rcParams.update({'figure.figsize': (5, 4)})
         # plt.suptitle('Relationship between True Sources $\mathbf{S}_{\mathrm{X}}$ and $\mathbf{S}_{\mathrm{Y}}$', fontweight='bold', fontsize=19)
@@ -147,7 +145,7 @@ class TwoChannelModel():
         plt.title(title, fontsize='14')
         plt.ylabel('$\mathbf{X}$', fontweight='bold', fontsize='18')
         plt.xlabel('$\mathbf{Y}$', fontweight='bold', fontsize='18')
-        legend = plt.scatter(self.X.T[0], self.Y.T[0], c='black', marker='.')
+        legend = plt.scatter(X[0], Y[0], c='black', marker='.')
         # legend.set_label('rhos=[1, 1, 1]')
         # legend = plt.scatter(self.TC_x, self.test, c='black', marker='.')
         # legend.set_label('rhos=[0.95, 0.95, 0.95]')
@@ -159,7 +157,10 @@ class TwoChannelModel():
         plt.show(block=False)
         plt.close('all')
 
-        print("Generated Signal of Dimensions {0} X {1} \n".format(len(self.X), len(self.X[0])))
+        print("Generated Signal of Dimensions {0} X {1} \n".format(len(X), len(X[0])))
+
+        self.X = X
+        self.Y = Y
 
     def _PCC(self, TC_x, TC_y):
         calc_cov = []
@@ -196,6 +197,7 @@ class TwoChannelModel():
         tile_dim = [data_dim, 1]
         view1 = np.tile(np.copy(test_sample[None]), tile_dim)
         view2 = np.copy(view1)
+
         _sigmoid = lambda x: np.array([1 / (1 + np.exp(-x_i)) for x_i in x])
 
         for i in range(num_channels):
@@ -225,4 +227,4 @@ class TwoChannelModel():
         views_concat = np.concatenate([view1, view2], axis=0)
         final_data = np.array([views_concat[i, :][None] for i in range(2 * data_dim)])
 
-        return final_data, test_sample
+        return final_data, test_sample, self.S_x, self.S_y
