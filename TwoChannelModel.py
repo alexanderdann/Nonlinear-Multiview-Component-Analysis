@@ -82,8 +82,6 @@ class TwoChannelModel():
 
             shared_x = np.array([repr1, repr2])
             shared_y = np.copy(shared_x)
-            #shared_x = np.tile(repr1, (shared_dim, 1))
-            #shared_y = np.tile(repr2, (shared_dim, 1))
 
             plt.scatter(shared_x[0], shared_x[1])
             plt.xlabel('$\mathrm{dimension1}$', fontsize='18')
@@ -92,9 +90,6 @@ class TwoChannelModel():
 
             private_x = np.array([np.random.normal(-.5, 1, observations) for _ in range(3)])
             private_y = np.array([np.random.normal(.8, 1.5, observations) for _ in range(3)])
-
-            #private_x = np.random.random((private_dim, repr1.shape[0]))
-            #private_y = np.random.random((private_dim, repr2.shape[0]))
 
             self.S_x = np.concatenate([shared_x, private_x], axis=0)
             self.S_y = np.concatenate([shared_y, private_y], axis=0)
@@ -186,7 +181,7 @@ class TwoChannelModel():
 
     def _gen_parabola(self, observations):
         x = np.linspace(-1, 1, observations)
-        f_x = x**2
+        f_x = x**2 - 0.3
 
         return x, f_x
 

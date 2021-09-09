@@ -147,15 +147,15 @@ def train_neutral_network(epochs, num_views, num_channels, encoder_dims, decoder
     for s in range(shared_dim):
         for v in range(num_views):
             if v == 0:
-                axes[s, v].plot(S_x[s], NCA_Class.est_sources[v][s])
+                axes[s, v].scatter(S_x[s], NCA_Class.est_sources[v][s], s=4)
                 xlab = '$\mathbf{s}_{\mathrm{X}}^{('+ str(s) +')}$'
-                ylab = r'$\mathbf{\varepsilon}^{('+ str(s) +')}$'
+                ylab = r'$\hat{\mathbf{\varepsilon}}^{('+ str(s) +')}$'
                 axes[s, v].set_xlabel(xlab)
                 axes[s, v].set_ylabel(ylab)
             elif v == 1:
-                axes[s, v].plot(S_y[s], NCA_Class.est_sources[v][s])
+                axes[s, v].scatter(S_y[s], NCA_Class.est_sources[v][s], s=4)
                 xlab = '$\mathbf{s}_{\mathrm{Y}}^{(' + str(s) + ')}$'
-                ylab = r'$\mathbf{\omega}^{(' + str(s) + ')}$'
+                ylab = r'$\hat{\mathbf{\omega}}^{(' + str(s) + ')}$'
                 axes[s, v].set_xlabel(xlab)
                 axes[s, v].set_ylabel(ylab)
 
