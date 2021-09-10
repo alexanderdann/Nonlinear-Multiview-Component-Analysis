@@ -1,6 +1,7 @@
 import tensorflow as tf
-import numpy as np
+from tqdm import tqdm
 import visualkeras
+import matplotlib.patheffects as PathEffects
 from models import BatchPreparation, NonlinearComponentAnalysis, CCA
 import matplotlib.pyplot as plt
 import time
@@ -25,7 +26,7 @@ samples = 1024
 z_dim = 2
 c_dim = 3
 num_views = 2
-epochs = 500
+epochs = 5000
 assert z_dim == 2
 
 autoencoder_dims = [(1, None), (256, 'relu'), (1, None)]
@@ -64,18 +65,16 @@ def train_neutral_network(epochs, num_views, num_channels, encoder_dims, decoder
     NCA_Model = NCA_Class.NCA
 
     loss_arr = []
-    for batch_idx in range(batch_dims):
+    for batch_idx in tqdm(range(batch_dims), desc='Batch ID'):
         chunkX = tf.transpose(batched_X[batch_idx])
         chunkY = tf.transpose(batched_Y[batch_idx])
         chunkXandY = tf.concat([chunkX, chunkY], 1)
 
         data_chunk = [chunkXandY[:,i][None] for i in range(2*data_dim)]
-        #data_chunk = chunkXandY#[chunkXandY[i][None] for i in range(2*data_dim)]
-        print(tf.shape(data_chunk))
 
-        for epoch in range(epochs):
-            print(f'######## Batch {batch_idx+1}/{batch_dims} ########')
-            print(f'######## Epoch {epoch+1}/{epochs} ########')
+        for epoch in tqdm(range(epochs), desc='Epochs'):
+            #print(f'######## Batch {batch_idx+1}/{batch_dims} ########')
+            #print(f'######## Epoch {epoch+1}/{epochs} ########')
             with tf.GradientTape() as tape:
                 tape.watch(data_chunk)
                 output_of_encoders, output_of_decoders = NCA_Model(data_chunk)
@@ -133,14 +132,17 @@ def train_neutral_network(epochs, num_views, num_channels, encoder_dims, decoder
 
     x_axis = np.linspace(1, epochs, epochs)
     corrs = len(NCA_Class.can_corr[0])
-    labels = [r'Correlation $\rho^{('+ str(i+1) +')}$' for i in range(corrs)]
+    labels = [r'Correlation $\rho^{('+ str(i) +')}$' for i in range(corrs)]
     plt.plot(x_axis, NCA_Class.can_corr, label=labels)
     plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.30), ncol=3, fancybox=True, shadow=True)
     plt.ylabel(r'Canonical Correlation value')
     plt.xlabel(r'Epochs')
+    plt.yticks(np.arange(0.0, 1.0, 0.2))
     plt.xticks([i for i in range(1, epochs+1) if (i % (0.5*epochs) == 0) or (i==1) or (i==epochs)])
     plt.tight_layout()
     plt.show()
+
+    assert samples == batch_size
 
     fig, axes = plt.subplots(shared_dim, num_views)
 
@@ -163,6 +165,78 @@ def train_neutral_network(epochs, num_views, num_channels, encoder_dims, decoder
     plt.tight_layout()
     plt.show()
 
+    Cov_SE, dim1, dim2 = PCC_Matrix(tf.constant(S_x, tf.float32), NCA_Class.est_sources[0], samples)
+
+    fig, ax = plt.subplots(figsize=(4, 6))
+    legend = ax.imshow(Cov_SE, cmap='Oranges')
+    clrbr = plt.colorbar(legend, orientation="horizontal", pad=0.15)
+    for t in clrbr.ax.get_xticklabels():
+        t.set_fontsize(10)
+    legend.set_clim(0, 1)
+    clrbr.set_label(r'Correlation', fontsize=   15)
+    plt.xlabel(r'$\hat{\mathbf{\varepsilon}}$', fontsize=18)
+    plt.ylabel(r'$\mathbf{S}_{\mathrm{X}}$', fontsize=18)
+    plt.xticks(np.arange(0, dim2, 1), labels=np.arange(0, dim2, 1), fontsize=12)
+    plt.yticks(np.arange(0, dim1, 1), np.arange(0, dim1, 1), fontsize=12)
+    plt.tick_params(
+        axis='x',
+        which='both',
+        bottom=False,
+        top=False)
+
+    for i in range(len(Cov_SE[0])):
+        for j in range(len(Cov_SE)):
+            c = np.around(Cov_SE[j, i], 2)
+            txt = ax.text(i, j, str(c), va='center', ha='center', color='black', size='x-large')
+            txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='w')])
+
+    plt.show()
+
+    Cov_SO, dim1, dim2 = PCC_Matrix(tf.constant(S_y, tf.float32), NCA_Class.est_sources[1], samples)
+
+    fig, ax = plt.subplots(figsize=(4, 6))
+    legend = ax.imshow(Cov_SO, cmap='Oranges')
+    clrbr = plt.colorbar(legend, orientation="horizontal", pad=0.15)
+    for t in clrbr.ax.get_xticklabels():
+        t.set_fontsize(10)
+    legend.set_clim(0, 1)
+    clrbr.set_label(r'Correlation', fontsize=15)
+    plt.xlabel(r'$\hat{\mathbf{\omega}}$', fontsize=18)
+    plt.ylabel(r'$\mathbf{S}_{\mathrm{Y}}$', fontsize=18)
+    plt.xticks(np.arange(0, dim2, 1), labels=np.arange(0, dim2, 1), fontsize=12)
+    plt.yticks(np.arange(0, dim1, 1), np.arange(0, dim1, 1), fontsize=12)
+    plt.tick_params(
+        axis='x',
+        which='both',
+        bottom=False,
+        top=False)
+
+    for i in range(len(Cov_SO[0])):
+        for j in range(len(Cov_SO)):
+            c = np.around(Cov_SO[j, i], 2)
+            txt = ax.text(i, j, str(c), va='center', ha='center', color='black', size='x-large')
+            txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='w')])
+
+    plt.show()
+
+
+
+def PCC_Matrix(view1, view2, observations):
+    assert tf.shape(view1)[1] == observations
+    assert tf.shape(view1)[1] == tf.shape(view2)[1]
+
+    calc_cov = np.zeros([tf.shape(view1)[0], tf.shape(view2)[0]])
+
+    for dim1 in range(tf.shape(view1)[0]):
+        for dim2 in range(tf.shape(view2)[0]):
+            mu_1 = tf.reduce_mean(view1[dim1])
+            mu_2 = tf.reduce_mean(view2[dim2])
+            sigma_1 = tf.math.sqrt(tf.reduce_sum([(x - mu_1) ** 2 for x in view1[dim1]]))
+            sigma_2 = tf.math.sqrt(tf.reduce_sum([(x - mu_2) ** 2 for x in view2[dim2]]))
+            tmp = tf.reduce_sum([(view1[dim1][i]-mu_1)*(view2[dim2][i]-mu_2) for i in range(observations)])/(sigma_1*sigma_2)
+            calc_cov[dim1, dim2] = np.abs(tmp.numpy())
+
+    return calc_cov, tf.shape(view1)[0], tf.shape(view2)[0]
 
 for it in range(1):
     path_add = f'Iteration_{it}'

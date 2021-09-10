@@ -25,17 +25,20 @@ class CCA():
         V1 = tf.cast(view1, dtype=tf.float32)
         V2 = tf.cast(view2, dtype=tf.float32)
 
-        print(tf.shape(V1))
-
-        r1 = 0
-        r2 = 0
+        r1 = 0.0
+        r2 = 0.0
 
         assert V1.shape[0] == V2.shape[0]
         M = tf.constant(V1.shape[0], dtype=tf.float32)
         ddim = tf.constant(V1.shape[1], dtype=tf.int16)
         # check mean and variance
-        V1_bar = V1 - tf.matmul(V1, tf.ones(shape=[ddim, ddim]))  # tf.tile(meanV1, [M, 1])
-        V2_bar = V2 - tf.matmul(V2, tf.ones(shape=[ddim, ddim]))  # tf.tile(meanV2, [M, 1])
+
+        mean_V1 = tf.reduce_mean(V1, 0)
+        mean_V2 = tf.reduce_mean(V2, 0)
+
+        V1_bar = tf.subtract(V1, tf.tile(tf.convert_to_tensor(mean_V1)[None], [M, 1]))
+        #print(tf.tile(tf.convert_to_tensor(mean_V1)[None], [M, 1]))
+        V2_bar = tf.subtract(V2, tf.tile(tf.convert_to_tensor(mean_V2)[None], [M, 1]))
 
         Sigma12 = tf.linalg.matmul(tf.transpose(V1_bar), V2_bar) / (M - 1)
         Sigma11 = tf.linalg.matmul(tf.transpose(V1_bar), V1_bar) / (M - 1) + r1 * tf.eye(ddim)
@@ -216,7 +219,7 @@ class NonlinearComponentAnalysis(tf.keras.Model):
         #self.U = self.update_U_2(shared_dim, batch_size)
         Z = tf.subtract(epsilon, omega)
 
-        lambda_reg = tf.constant(0.01, dtype=tf.float32)
+        lambda_reg = tf.constant(0.6, dtype=tf.float32)
 
         #arg1 = Z - tf.matmul(B_1, tf.transpose(encoder1))
         #arg2 = Z - tf.matmul(B_2, tf.transpose(encoder2))
