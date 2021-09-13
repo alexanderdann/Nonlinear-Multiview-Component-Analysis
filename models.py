@@ -12,6 +12,7 @@ def BatchPreparation(batch_size, samples, data):
 
     return tf.constant(batched_data, name='Batched Data')
 
+
 class CCA():
     def __init__(self, view1, view2, shared_dim):
         self.A, self.B, self.epsilon, self.omega, self.ccor = self._calculate(view1, view2, shared_dim)
@@ -20,8 +21,6 @@ class CCA():
         return (self.A, self.B), (self.epsilon, self.omega, self.ccor)
 
     def _calculate(self, view1, view2, shared_dim):
-        print('\n\n\n--------- CCA Start ---------\n\n')
-
         V1 = tf.cast(view1, dtype=tf.float32)
         V2 = tf.cast(view2, dtype=tf.float32)
 
@@ -37,7 +36,6 @@ class CCA():
         mean_V2 = tf.reduce_mean(V2, 0)
 
         V1_bar = tf.subtract(V1, tf.tile(tf.convert_to_tensor(mean_V1)[None], [M, 1]))
-        #print(tf.tile(tf.convert_to_tensor(mean_V1)[None], [M, 1]))
         V2_bar = tf.subtract(V2, tf.tile(tf.convert_to_tensor(mean_V2)[None], [M, 1]))
 
         Sigma12 = tf.linalg.matmul(tf.transpose(V1_bar), V2_bar) / (M - 1)
@@ -49,7 +47,6 @@ class CCA():
         Sigma22_root_inv_T = tf.transpose(Sigma22_root_inv)
 
         C = tf.linalg.matmul(tf.linalg.matmul(Sigma11_root_inv, Sigma12), Sigma22_root_inv_T)
-        #print(f'C Shape: {C.shape}\n\nC values: {C}\n')
         D, U, V = tf.linalg.svd(C, full_matrices=True)
 
         A = tf.matmul(tf.transpose(U)[:shared_dim], Sigma11_root_inv)
@@ -57,11 +54,6 @@ class CCA():
 
         epsilon = tf.matmul(A, tf.transpose(V1_bar))
         omega = tf.matmul(B, tf.transpose(V2_bar))
-
-        print("Canonical Correlations: " + str(D))
-        print('\n\n--------- CCA End ---------')
-
-        #print(f'B DIM {tf.shape(epsilon)}')
 
         return A, B, epsilon, omega, D
 
@@ -121,10 +113,8 @@ class NonlinearComponentAnalysis(tf.keras.Model):
 
         model = tf.keras.Model(inputs=self.view_input, outputs=[self.encoders_outs, self.decoders_outs])
 
-        print(f'Visualization following...\n')
         tf.keras.utils.plot_model(model, to_file='model.png', show_shapes=True)
 
-        print(f'Summary following...\n')
         model.summary()
         model.compile()
 
@@ -177,12 +167,9 @@ class NonlinearComponentAnalysis(tf.keras.Model):
 
         self.can_corr.append(cca_data[2])
 
-
         return B_1, B_2, cca_data[0], cca_data[1]
 
     def update_U(self, B_views, batch_size, encoder_data):
-        #print(f'\nB Shape: {tf.shape(B_views)}')
-        #print(f'Encoder Shape: {tf.shape(encoder_data[0])}\n')
 
         dim = encoder_data[0].shape[0]
         n_views = tf.shape(B_views)[0]
@@ -199,10 +186,8 @@ class NonlinearComponentAnalysis(tf.keras.Model):
         D, P, Q = tf.linalg.svd(int_U, full_matrices=False)
 
         # singular values - left singular vectors - right singular vectors
-        # print(f'{tf.shape(D)} - {tf.shape(P)} - {tf.shape(Q)}')
 
         return tf.sqrt(I_t)*tf.matmul(P, tf.transpose(Q))
-
 
     def loss(self, enc1, enc2, dec1, dec2, init1, init2, batch_size, shared_dim):
         input1 = tf.cast(init1, dtype=tf.float32)
@@ -233,5 +218,4 @@ class NonlinearComponentAnalysis(tf.keras.Model):
 
         final_loss = loss1 + loss2
 
-        print(f'\n######## Loss: {final_loss} ########\n')
         return final_loss

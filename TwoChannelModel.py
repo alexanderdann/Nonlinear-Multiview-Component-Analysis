@@ -1,3 +1,4 @@
+import tensorflow as tf
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
@@ -6,6 +7,26 @@ np.random.seed(3333)
 sns.set()
 sns.set_style('white')
 sns.set_context('paper')
+
+
+def PCC_Matrix(view1, view2, observations):
+    assert tf.shape(view1)[1] == observations
+    assert tf.shape(view1)[1] == tf.shape(view2)[1]
+
+    calc_cov = np.zeros([tf.shape(view1)[0], tf.shape(view2)[0]])
+
+    for dim1 in range(tf.shape(view1)[0]):
+        for dim2 in range(tf.shape(view2)[0]):
+            mu_1 = tf.reduce_mean(view1[dim1])
+            mu_2 = tf.reduce_mean(view2[dim2])
+            sigma_1 = tf.math.sqrt(tf.reduce_sum([(x - mu_1) ** 2 for x in view1[dim1]]))
+            sigma_2 = tf.math.sqrt(tf.reduce_sum([(x - mu_2) ** 2 for x in view2[dim2]]))
+            tmp = tf.reduce_sum([(view1[dim1][i]-mu_1)*(view2[dim2][i]-mu_2)
+                                for i in range(observations)])/(sigma_1*sigma_2)
+            calc_cov[dim1, dim2] = np.abs(tmp.numpy())
+
+    return calc_cov, tf.shape(view1)[0], tf.shape(view2)[0]
+
 
 class TwoChannelModel():
     def __init__(self, path, observations, mixing_dim, shared_dim, private_dim, mode, transformation=False, rhos=np.array([-1])):
@@ -23,7 +44,8 @@ class TwoChannelModel():
         print("Columns of Source Matrices: " + str(len(self.S_x[0])) + "\n")
 
     def eval(self, batch_size, num_channels, data_dim, t_min=-10, t_max=10):
-        self.eval_data, self.test_sample, S_x, S_y = self._create_evaluation_data(batch_size, num_channels, data_dim, t_min=-10, t_max=10)
+        self.eval_data, self.test_sample, S_x, S_y = self._create_evaluation_data(
+            batch_size, num_channels, data_dim, t_min=-10, t_max=10)
         return self.eval_data, self.test_sample, S_y, S_y
 
     def getitems(self):
@@ -46,14 +68,12 @@ class TwoChannelModel():
 
             self.mv_samples.append(multivar_sample.T)
 
-
         for i in range(num_comp):
             self.A_x[:, i] = self.mv_samples[i][0]
             self.A_y[:, i] = self.mv_samples[i][1]
 
         if mode == 'Gaussian':
             self.mix = 'Gaussian'
-
 
             assert len(rhos) == shared_dim + private_dim
 
@@ -104,7 +124,7 @@ class TwoChannelModel():
         self.created_rhos = self._PCC(self.S_x.T, self.S_y.T)
 
         if nonlinearTr == True:
-            _sigmoid = lambda x: np.array([1/(1 + np.exp(-x_i)) for x_i in x])
+            def _sigmoid(x): return np.array([1/(1 + np.exp(-x_i)) for x_i in x])
 
             for i in range(num_comp):
                 if i == 0:
@@ -178,7 +198,6 @@ class TwoChannelModel():
 
         return calc_cov
 
-
     def _gen_parabola(self, observations):
         x = np.linspace(-1, 1, observations)
         f_x = x**2 - 0.3
@@ -191,7 +210,7 @@ class TwoChannelModel():
         view1 = np.tile(np.copy(test_sample[None]), tile_dim)
         view2 = np.copy(view1)
 
-        _sigmoid = lambda x: np.array([1 / (1 + np.exp(-x_i)) for x_i in x])
+        def _sigmoid(x): return np.array([1 / (1 + np.exp(-x_i)) for x_i in x])
 
         for i in range(num_channels):
             if i == 0:
