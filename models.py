@@ -12,7 +12,6 @@ def BatchPreparation(batch_size, samples, data):
 
     return tf.constant(batched_data, name='Batched Data')
 
-
 class CCA():
     def __init__(self, view1, view2, shared_dim):
         self.A, self.B, self.epsilon, self.omega, self.ccor = self._calculate(view1, view2, shared_dim)
@@ -21,6 +20,8 @@ class CCA():
         return (self.A, self.B), (self.epsilon, self.omega, self.ccor)
 
     def _calculate(self, view1, view2, shared_dim):
+        #print('\n\n\n--------- CCA Start ---------\n\n')
+
         V1 = tf.cast(view1, dtype=tf.float32)
         V2 = tf.cast(view2, dtype=tf.float32)
 
@@ -36,6 +37,7 @@ class CCA():
         mean_V2 = tf.reduce_mean(V2, 0)
 
         V1_bar = tf.subtract(V1, tf.tile(tf.convert_to_tensor(mean_V1)[None], [M, 1]))
+        #print(tf.tile(tf.convert_to_tensor(mean_V1)[None], [M, 1]))
         V2_bar = tf.subtract(V2, tf.tile(tf.convert_to_tensor(mean_V2)[None], [M, 1]))
 
         Sigma12 = tf.linalg.matmul(tf.transpose(V1_bar), V2_bar) / (M - 1)
@@ -47,6 +49,7 @@ class CCA():
         Sigma22_root_inv_T = tf.transpose(Sigma22_root_inv)
 
         C = tf.linalg.matmul(tf.linalg.matmul(Sigma11_root_inv, Sigma12), Sigma22_root_inv_T)
+        #print(f'C Shape: {C.shape}\n\nC values: {C}\n')
         D, U, V = tf.linalg.svd(C, full_matrices=True)
 
         A = tf.matmul(tf.transpose(U)[:shared_dim], Sigma11_root_inv)
@@ -55,16 +58,19 @@ class CCA():
         epsilon = tf.matmul(A, tf.transpose(V1_bar))
         omega = tf.matmul(B, tf.transpose(V2_bar))
 
+        #print("Canonical Correlations: " + str(D))
+        #print('\n\n--------- CCA End ---------')
+
         return A, B, epsilon, omega, D
 
 
 class NonlinearComponentAnalysis(tf.keras.Model):
-    def __init__(self, num_views, num_channels, encoder_layers, decoder_layers, batch_size):
+    def __init__(self, num_views, num_channels, encoder_layers, decoder_layers, batch_size, lambda_val):
         super(NonlinearComponentAnalysis, self).__init__()
         self.num_views = num_views
-        self.gamma_t = tf.Variable(10**-3, tf.float32)
+        self.lambda_reg = tf.constant(lambda_val, dtype=tf.float32)
         self.U = 0
-        self.optimizer = tf.keras.optimizers.Adam()
+        self.optimizer = tf.keras.optimizers.Adam(3e-4)
         self.mse = tf.keras.losses.MeanSquaredError()
         self.can_corr = []
 
@@ -113,8 +119,10 @@ class NonlinearComponentAnalysis(tf.keras.Model):
 
         model = tf.keras.Model(inputs=self.view_input, outputs=[self.encoders_outs, self.decoders_outs])
 
-        tf.keras.utils.plot_model(model, to_file='model.png', show_shapes=True)
+        print(f'Visualization following...\n')
+        #tf.keras.utils.plot_model(model, to_file='model.png', show_shapes=True)
 
+        print(f'Summary following...\n')
         model.summary()
         model.compile()
 
@@ -170,12 +178,14 @@ class NonlinearComponentAnalysis(tf.keras.Model):
         return B_1, B_2, cca_data[0], cca_data[1]
 
     def update_U(self, B_views, batch_size, encoder_data):
+        #print(f'\nB Shape: {tf.shape(B_views)}')
+        #print(f'Encoder Shape: {tf.shape(encoder_data[0])}\n')
 
         dim = encoder_data[0].shape[0]
         n_views = tf.shape(B_views)[0]
         half = tf.constant(0.5, dtype=tf.float32)
         I_t = tf.cast(batch_size, dtype=tf.float32)
-        W = tf.eye(dim, dim) - tf.matmul(tf.ones([dim, dim]), tf.transpose(tf.ones([dim, dim])))/I_t
+        W = tf.eye(dim, dim) - tf.matmul(tf.ones([dim, 1]), tf.transpose(tf.ones([dim, 1])))/I_t
 
         assert n_views == 2
         int_Z = [half*tf.matmul(B_views[i], tf.transpose(encoder_data[i])) for i in range(n_views)]
@@ -186,8 +196,12 @@ class NonlinearComponentAnalysis(tf.keras.Model):
         D, P, Q = tf.linalg.svd(int_U, full_matrices=False)
 
         # singular values - left singular vectors - right singular vectors
+        # print(f'{tf.shape(D)} - {tf.shape(P)} - {tf.shape(Q)}')
 
         return tf.sqrt(I_t)*tf.matmul(P, tf.transpose(Q))
+
+
+
 
     def loss(self, enc1, enc2, dec1, dec2, init1, init2, batch_size, shared_dim):
         input1 = tf.cast(init1, dtype=tf.float32)
@@ -200,22 +214,32 @@ class NonlinearComponentAnalysis(tf.keras.Model):
         decoder2 = tf.cast(dec2, dtype=tf.float32)
 
         B_1, B_2, epsilon, omega = self.getCCA(encoder1, encoder2, shared_dim)
-        #self.U = self.update_U([B_1, B_2], batch_size, [encoder1, encoder2])
-        #self.U = self.update_U_2(shared_dim, batch_size)
-        Z = tf.subtract(epsilon, omega)
 
-        lambda_reg = tf.constant(0.6, dtype=tf.float32)
+        U_for_dist = self.update_U([B_1, B_2], batch_size, [encoder1, encoder2])
+
+        Z = tf.subtract(epsilon, omega)
 
         #arg1 = Z - tf.matmul(B_1, tf.transpose(encoder1))
         #arg2 = Z - tf.matmul(B_2, tf.transpose(encoder2))
         #args = [arg1, arg2]
+
         loss1 = tf.math.reduce_euclidean_norm(Z) ** 2
 
         reg_args = [tf.subtract(input1, decoder1),
                     tf.subtract(input2, decoder2)]
         tmp_loss2 = [tf.math.reduce_euclidean_norm(arg) ** 2 for arg in reg_args]
-        loss2 = lambda_reg * tf.math.reduce_sum(tmp_loss2)
-
+        loss2 = self.lambda_reg * tf.math.reduce_mean(tmp_loss2)
+        # plot the losses separately
         final_loss = loss1 + loss2
 
-        return final_loss
+        #print(f'\n######## Loss: {final_loss} ########\n')
+        return final_loss, loss1, loss2, Z
+
+
+
+# dist measure
+# both losses
+# depth of network
+# average last 50
+# grid search lambda
+# different trainings

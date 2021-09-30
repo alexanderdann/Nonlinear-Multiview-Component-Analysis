@@ -1,4 +1,3 @@
-import tensorflow as tf
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
@@ -8,32 +7,12 @@ sns.set()
 sns.set_style('white')
 sns.set_context('paper')
 
-
-def PCC_Matrix(view1, view2, observations):
-    assert tf.shape(view1)[1] == observations
-    assert tf.shape(view1)[1] == tf.shape(view2)[1]
-
-    calc_cov = np.zeros([tf.shape(view1)[0], tf.shape(view2)[0]])
-
-    for dim1 in range(tf.shape(view1)[0]):
-        for dim2 in range(tf.shape(view2)[0]):
-            mu_1 = tf.reduce_mean(view1[dim1])
-            mu_2 = tf.reduce_mean(view2[dim2])
-            sigma_1 = tf.math.sqrt(tf.reduce_sum([(x - mu_1) ** 2 for x in view1[dim1]]))
-            sigma_2 = tf.math.sqrt(tf.reduce_sum([(x - mu_2) ** 2 for x in view2[dim2]]))
-            tmp = tf.reduce_sum([(view1[dim1][i]-mu_1)*(view2[dim2][i]-mu_2)
-                                for i in range(observations)])/(sigma_1*sigma_2)
-            calc_cov[dim1, dim2] = np.abs(tmp.numpy())
-
-    return calc_cov, tf.shape(view1)[0], tf.shape(view2)[0]
-
-
 class TwoChannelModel():
-    def __init__(self, path, observations, mixing_dim, shared_dim, private_dim, mode, transformation=False, rhos=np.array([-1])):
+    def __init__(self, path, observations, mixing_dim, shared_dim, private_dim, mode, transformation=False, rhos=np.array([-1]), seed=3333):
         print("----- TwoChannelModel -----\n")
 
         self.path = path
-        np.random.seed(3333)
+        np.random.seed(seed)
 
         self._transform(observations, mixing_dim, shared_dim, private_dim, mode, transformation, rhos)
 
@@ -44,18 +23,17 @@ class TwoChannelModel():
         print("Columns of Source Matrices: " + str(len(self.S_x[0])) + "\n")
 
     def eval(self, batch_size, num_channels, data_dim, t_min=-10, t_max=10):
-        self.eval_data, self.test_sample, S_x, S_y = self._create_evaluation_data(
-            batch_size, num_channels, data_dim, t_min=-10, t_max=10)
+        self.eval_data, self.test_sample, S_x, S_y = self._create_evaluation_data(batch_size, num_channels, data_dim, t_min=-10, t_max=10)
         return self.eval_data, self.test_sample, S_y, S_y
 
     def getitems(self):
-        return self.X, self.Y, self.S_x, self.S_y, self.created_rhos
+        return self.X, self.Y, self.S_x, self.S_y, self.created_rhos, self.AS_x, self.AS_y
 
     def _transform(self, observations, mixing_dim, shared_dim, private_dim, mode, nonlinearTr, rhos):
         num_comp = shared_dim + private_dim
 
-        self.A_x = np.random.randn(mixing_dim, num_comp)
-        self.A_y = np.random.randn(mixing_dim, num_comp)
+        self.A_x = np.zeros((mixing_dim, num_comp))
+        self.A_y = np.zeros((mixing_dim, num_comp))
 
         self.mv_samples = []
         for num in range(num_comp):
@@ -68,12 +46,14 @@ class TwoChannelModel():
 
             self.mv_samples.append(multivar_sample.T)
 
+
         for i in range(num_comp):
             self.A_x[:, i] = self.mv_samples[i][0]
             self.A_y[:, i] = self.mv_samples[i][1]
 
         if mode == 'Gaussian':
             self.mix = 'Gaussian'
+
 
             assert len(rhos) == shared_dim + private_dim
 
@@ -103,10 +83,10 @@ class TwoChannelModel():
             shared_x = np.array([repr1, repr2])
             shared_y = np.copy(shared_x)
 
-            plt.scatter(shared_x[0], shared_x[1])
-            plt.xlabel('$\mathrm{dimension1}$', fontsize='18')
-            plt.ylabel('$\mathrm{dimension2}$', fontsize='18')
-            plt.show()
+            #plt.scatter(shared_x[0], shared_x[1])
+            #plt.xlabel('$\mathrm{dimension1}$', fontsize='18')
+            #plt.ylabel('$\mathrm{dimension2}$', fontsize='18')
+            #plt.show()
 
             private_x = np.array([np.random.normal(-.5, 1, observations) for _ in range(3)])
             private_y = np.array([np.random.normal(.8, 1.5, observations) for _ in range(3)])
@@ -121,10 +101,13 @@ class TwoChannelModel():
         X = np.dot(self.A_x, self.S_x)
         Y = np.dot(self.A_y, self.S_y)
 
+        self.AS_x = np.copy(X)
+        self.AS_y = np.copy(Y)
+
         self.created_rhos = self._PCC(self.S_x.T, self.S_y.T)
 
         if nonlinearTr == True:
-            def _sigmoid(x): return np.array([1/(1 + np.exp(-x_i)) for x_i in x])
+            _sigmoid = lambda x: np.array([1/(1 + np.exp(-x_i)) for x_i in x])
 
             for i in range(num_comp):
                 if i == 0:
@@ -152,23 +135,24 @@ class TwoChannelModel():
 
         mix = self.mix
 
-        plt.rcParams.update({'figure.figsize': (5, 4)})
-        # plt.suptitle('Relationship between True Sources $\mathbf{S}_{\mathrm{X}}$ and $\mathbf{S}_{\mathrm{Y}}$', fontweight='bold', fontsize=19)
-        title = 'Transformation: ' + mix
-        plt.title(title, fontsize='14')
-        plt.ylabel('$\mathbf{Y}$', fontweight='bold', fontsize='18')
-        plt.xlabel('$\mathbf{X}$', fontweight='bold', fontsize='18')
-        legend = plt.scatter(X[0], Y[0], c='black', marker='.')
-        # legend.set_label('rhos=[1, 1, 1]')
-        # legend = plt.scatter(self.TC_x, self.test, c='black', marker='.')
-        # legend.set_label('rhos=[0.95, 0.95, 0.95]')
-        # plt.legend()
-        plt.xlim(-5, 5)
-        plt.tight_layout()
-        full_path = self.path + '/' + 'GENSIG.png'
-        plt.savefig(full_path)
-        plt.show(block=False)
-        plt.close('all')
+        if False:
+            plt.rcParams.update({'figure.figsize': (5, 4)})
+            # plt.suptitle('Relationship between True Sources $\mathbf{S}_{\mathrm{X}}$ and $\mathbf{S}_{\mathrm{Y}}$', fontweight='bold', fontsize=19)
+            title = 'Transformation: ' + mix
+            plt.title(title, fontsize='14')
+            plt.ylabel('$\mathbf{Y}$', fontweight='bold', fontsize='18')
+            plt.xlabel('$\mathbf{X}$', fontweight='bold', fontsize='18')
+            legend = plt.scatter(X[0], Y[0], c='black', marker='.')
+            # legend.set_label('rhos=[1, 1, 1]')
+            # legend = plt.scatter(self.TC_x, self.test, c='black', marker='.')
+            # legend.set_label('rhos=[0.95, 0.95, 0.95]')
+            # plt.legend()
+            plt.xlim(-5, 5)
+            plt.tight_layout()
+            full_path = self.path + '/' + 'GENSIG.png'
+            #plt.savefig(full_path)
+            plt.show(block=False)
+            plt.close('all')
 
         print("Generated Signal of Dimensions {0} X {1} \n".format(len(X), len(X[0])))
 
@@ -198,6 +182,7 @@ class TwoChannelModel():
 
         return calc_cov
 
+
     def _gen_parabola(self, observations):
         x = np.linspace(-1, 1, observations)
         f_x = x**2 - 0.3
@@ -210,7 +195,7 @@ class TwoChannelModel():
         view1 = np.tile(np.copy(test_sample[None]), tile_dim)
         view2 = np.copy(view1)
 
-        def _sigmoid(x): return np.array([1 / (1 + np.exp(-x_i)) for x_i in x])
+        _sigmoid = lambda x: np.array([1 / (1 + np.exp(-x_i)) for x_i in x])
 
         for i in range(num_channels):
             if i == 0:
