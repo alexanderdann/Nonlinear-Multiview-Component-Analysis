@@ -1,242 +1,95 @@
+import numpy as np
 import tensorflow as tf
 import matplotlib.pyplot as plt
-import seaborn as sns
-import numpy as np
-from numpy.random import default_rng
-np.random.seed(3333)
-sns.set()
-sns.set_style('white')
-sns.set_context('paper')
 
 
-def PCC_Matrix(view1, view2, observations):
-    assert tf.shape(view1)[1] == observations
-    assert tf.shape(view1)[1] == tf.shape(view2)[1]
-
-    calc_cov = np.zeros([tf.shape(view1)[0], tf.shape(view2)[0]])
-
-    for dim1 in range(tf.shape(view1)[0]):
-        for dim2 in range(tf.shape(view2)[0]):
-            mu_1 = tf.reduce_mean(view1[dim1])
-            mu_2 = tf.reduce_mean(view2[dim2])
-            sigma_1 = tf.math.sqrt(tf.reduce_sum([(x - mu_1) ** 2 for x in view1[dim1]]))
-            sigma_2 = tf.math.sqrt(tf.reduce_sum([(x - mu_2) ** 2 for x in view2[dim2]]))
-            tmp = tf.reduce_sum([(view1[dim1][i]-mu_1)*(view2[dim2][i]-mu_2)
-                                for i in range(observations)])/(sigma_1*sigma_2)
-            calc_cov[dim1, dim2] = np.abs(tmp.numpy())
-
-    return calc_cov, tf.shape(view1)[0], tf.shape(view2)[0]
+def _sigmoid(x):
+    return 1/(1 + np.exp(-x))
 
 
 class TwoChannelModel():
-    def __init__(self, path, observations, mixing_dim, shared_dim, private_dim, mode, transformation=False, rhos=np.array([-1])):
-        print("----- TwoChannelModel -----\n")
-
-        self.path = path
+    def __init__(self, num_samples):
         np.random.seed(3333)
+        self.num_samples = num_samples
 
-        self._transform(observations, mixing_dim, shared_dim, private_dim, mode, transformation, rhos)
+    def __call__(self):
+        return self._generate_samples()
 
-        print("Rows of Mixing Matrices: " + str(len(self.A_x)))
-        print("Columns of Mixing Matrices: " + str(len(self.A_x[0])) + "\n")
+    def _generate_samples(self):
+        # Mixing matrices
+        A_1 = np.random.normal(size=(5, 5))
+        A_2 = np.random.normal(size=(5, 5))
 
-        print("Rows of Source Matrices: " + str(len(self.S_x)))
-        print("Columns of Source Matrices: " + str(len(self.S_x[0])) + "\n")
+        # Shared parabola data
+        s1 = np.linspace(-1, 1, self.num_samples)
+        s1 = s1 - np.mean(s1)
+        s1 = s1/np.sqrt(np.var(s1))
+        s2 = s1**2
+        s2 = s2 - np.mean(s2)
+        s2 = s2/np.sqrt(np.var(s2))
+        #s1 = np.random.normal(loc=0, scale=1, size=self.num_samples)
+        #s2 = np.random.normal(loc=0, scale=1, size=self.num_samples)
 
-    def eval(self, batch_size, num_channels, data_dim, t_min=-10, t_max=10):
-        self.eval_data, self.test_sample, S_x, S_y = self._create_evaluation_data(
-            batch_size, num_channels, data_dim, t_min=-10, t_max=10)
-        return self.eval_data, self.test_sample, S_y, S_y
+        shared_1 = np.array([s1, s2])
+        shared_2 = np.copy(shared_1)
 
-    def getitems(self):
-        return self.X, self.Y, self.S_x, self.S_y, self.created_rhos
+        # Private noise data
+        private_1 = np.random.normal(-.5, 1, (3, self.num_samples))
+        private_2 = np.random.normal(.8, 1.5, (3, self.num_samples))
 
-    def _transform(self, observations, mixing_dim, shared_dim, private_dim, mode, nonlinearTr, rhos):
-        num_comp = shared_dim + private_dim
+        z_1 = np.concatenate([shared_1, private_1], axis=0)
+        z_2 = np.concatenate([shared_2, private_2], axis=0)
 
-        self.A_x = np.random.randn(mixing_dim, num_comp)
-        self.A_y = np.random.randn(mixing_dim, num_comp)
+        # Compose all channels
+        Az_1 = np.matmul(A_1, z_1)
+        Az_2 = np.matmul(A_2, z_2)
 
-        self.mv_samples = []
-        for num in range(num_comp):
-            mean = np.array([0, 0])
+        # Add non-linearities
+        y_1 = np.zeros_like(Az_1)
+        y_2 = np.zeros_like(Az_2)
 
-            cov = np.array([[1, 0],
-                            [0, 1]])
+        y_1[0] = 3 * _sigmoid(Az_1[0]) + 0.1 * Az_1[0]
+        y_2[0] = 5 * np.tanh(Az_2[0]) + 0.2 * Az_2[0]
 
-            multivar_sample = np.random.multivariate_normal(mean, cov, size=mixing_dim, check_valid='warn', tol=1e-10)
+        y_1[1] = 5 * _sigmoid(Az_1[1]) + 0.2 * Az_1[1]
+        y_2[1] = 2 * np.tanh(Az_2[1]) + 0.1 * Az_2[1]
 
-            self.mv_samples.append(multivar_sample.T)
+        y_1[2] = 0.2 * np.exp(Az_1[2])
+        y_2[2] = 0.1 * Az_2[2]**3 + Az_2[2]
 
-        for i in range(num_comp):
-            self.A_x[:, i] = self.mv_samples[i][0]
-            self.A_y[:, i] = self.mv_samples[i][1]
+        y_1[3] = -4 * _sigmoid(Az_1[3]) - 0.3 * Az_1[3]
+        y_2[3] = -5 * np.tanh(Az_2[3]) - 0.4 * Az_2[3]
 
-        if mode == 'Gaussian':
-            self.mix = 'Gaussian'
+        y_1[4] = -3 * _sigmoid(Az_1[4]) - 0.2 * Az_1[4]
+        y_2[4] = -6 * np.tanh(Az_2[4]) - 0.3 * Az_2[4]
 
-            assert len(rhos) == shared_dim + private_dim
+        return tf.convert_to_tensor(y_1, dtype=tf.float32), tf.convert_to_tensor(y_2, dtype=tf.float32), \
+            tf.convert_to_tensor(Az_1, dtype=tf.float32), tf.convert_to_tensor(Az_2, dtype=tf.float32), \
+            tf.convert_to_tensor(z_1, dtype=tf.float32), tf.convert_to_tensor(z_2, dtype=tf.float32)
 
-            self.S_x = np.random.randn(num_comp, observations)
-            self.S_y = np.random.randn(num_comp, observations)
+    @staticmethod
+    def plot_shared_components(z_1, z_2):
+        fig, axes = plt.subplots(1, 2, figsize=(10, 5))
 
-            self.mv_samples = []
-            for num in range(len(rhos)):
-                mean = np.array([0, 0])
+        axes[0].title.set_text(f'View {0}')
+        axes[0].scatter(z_1[0], z_1[1])
 
-                cov = np.array([[1, rhos[num]],
-                                [rhos[num], 1]])
+        axes[1].title.set_text(f'View {1}')
+        axes[1].scatter(z_2[0], z_2[1])
 
-                multivar_sample = np.random.multivariate_normal(mean, cov, size=observations, check_valid='warn',
-                                                                tol=1e-10)
-                self.mv_samples.append(multivar_sample.T)
-
-            for i in range(len(rhos)):
-                self.S_x[i] = self.mv_samples[i][0]
-                self.S_y[i] = self.mv_samples[i][1]
-
-        elif mode == 'Parabola':
-            self.mix = 'Parabola'
-
-            repr1, repr2 = self._gen_parabola(observations)
-
-            shared_x = np.array([repr1, repr2])
-            shared_y = np.copy(shared_x)
-
-            plt.scatter(shared_x[0], shared_x[1])
-            plt.xlabel('$\mathrm{dimension1}$', fontsize='18')
-            plt.ylabel('$\mathrm{dimension2}$', fontsize='18')
-            plt.show()
-
-            private_x = np.array([np.random.normal(-.5, 1, observations) for _ in range(3)])
-            private_y = np.array([np.random.normal(.8, 1.5, observations) for _ in range(3)])
-
-            self.S_x = np.concatenate([shared_x, private_x], axis=0)
-            self.S_y = np.concatenate([shared_y, private_y], axis=0)
-
-        else:
-            print('ERROR\n')
-            raise ValueError
-
-        X = np.dot(self.A_x, self.S_x)
-        Y = np.dot(self.A_y, self.S_y)
-
-        self.created_rhos = self._PCC(self.S_x.T, self.S_y.T)
-
-        if nonlinearTr == True:
-            def _sigmoid(x): return np.array([1/(1 + np.exp(-x_i)) for x_i in x])
-
-            for i in range(num_comp):
-                if i == 0:
-                    X[i] = 3 * _sigmoid(X[i]) + 0.1 * X[i]
-                    Y[i] = 5 * np.tanh(Y[i]) + 0.2 * Y[i]
-
-                elif i == 1:
-                    X[i] = 5 * _sigmoid(X[i]) + 0.2 * X[i]
-                    Y[i] = 2 * np.tanh(Y[i]) + 0.1 * Y[i]
-
-                elif i == 2:
-                    X[i] = 0.2 * np.exp(X[i])
-                    Y[i] = 0.1 * Y[i]**3 + Y[i]
-
-                elif i == 3:
-                    X[i] = -4 * _sigmoid(X[i]) - 0.3 * X[i]
-                    Y[i] = -5 * np.tanh(Y[i]) - 0.4 * Y[i]
-
-                elif i == 4:
-                    X[i] = -3 * _sigmoid(X[i]) + 0.2 * X[i]
-                    Y[i] = -6 * np.tanh(Y[i]) - 0.3 * Y[i]
-
-                else:
-                    break
-
-        mix = self.mix
-
-        plt.rcParams.update({'figure.figsize': (5, 4)})
-        # plt.suptitle('Relationship between True Sources $\mathbf{S}_{\mathrm{X}}$ and $\mathbf{S}_{\mathrm{Y}}$', fontweight='bold', fontsize=19)
-        title = 'Transformation: ' + mix
-        plt.title(title, fontsize='14')
-        plt.ylabel('$\mathbf{Y}$', fontweight='bold', fontsize='18')
-        plt.xlabel('$\mathbf{X}$', fontweight='bold', fontsize='18')
-        legend = plt.scatter(X[0], Y[0], c='black', marker='.')
-        # legend.set_label('rhos=[1, 1, 1]')
-        # legend = plt.scatter(self.TC_x, self.test, c='black', marker='.')
-        # legend.set_label('rhos=[0.95, 0.95, 0.95]')
-        # plt.legend()
-        plt.xlim(-5, 5)
         plt.tight_layout()
-        full_path = self.path + '/' + 'GENSIG.png'
-        plt.savefig(full_path)
-        plt.show(block=False)
-        plt.close('all')
+        plt.show()
 
-        print("Generated Signal of Dimensions {0} X {1} \n".format(len(X), len(X[0])))
+    @staticmethod
+    def plot_non_linearities(y_1, y_2, Az_1, Az_2):
+        fig, axes = plt.subplots(5, 2, figsize=(10, 15))
 
-        self.X = X
-        self.Y = Y
+        for c in range(5):
+            axes[c, 0].title.set_text(f'View {0} Channel {c}')
+            axes[c, 0].scatter(Az_1[c], y_1[c], label=r'$\mathrm{g}$')
 
-    def _PCC(self, TC_x, TC_y):
-        calc_cov = []
+            axes[c, 1].title.set_text(f'View {1} Channel {c}')
+            axes[c, 1].scatter(Az_2[c], y_2[c], label=r'$\mathrm{g}$')
 
-        print(f'self.TC_y {TC_y.shape}')
-
-        for i in range(len(TC_y.T)):
-            sigma_y = np.sqrt(np.array(sum([y ** 2 for y in TC_y.T[i]])) / len(TC_y))
-            sigma_x = np.sqrt(np.array(sum([x ** 2 for x in TC_x.T[i]])) / len(TC_x))
-            calc_cov.append(np.dot(TC_x.T[i], TC_y.T[i]) / (len(TC_x) * sigma_y * sigma_x))
-
-        calc_cov = np.sort(calc_cov)
-        calc_cov = calc_cov[::-1].copy()
-
-        for cor in range(len(calc_cov)):
-            if calc_cov[cor] > 1:
-                calc_cov[cor] = 1
-            elif calc_cov[cor] < 0:
-                calc_cov[cor] = 0
-
-        print(f'That are the computed correlations: {calc_cov}')
-
-        return calc_cov
-
-    def _gen_parabola(self, observations):
-        x = np.linspace(-1, 1, observations)
-        f_x = x**2 - 0.3
-
-        return x, f_x
-
-    def _create_evaluation_data(self, batch_size, num_channels, data_dim, t_min=-10, t_max=10):
-        test_sample = np.linspace(t_min, t_max, batch_size)
-        tile_dim = [data_dim, 1]
-        view1 = np.tile(np.copy(test_sample[None]), tile_dim)
-        view2 = np.copy(view1)
-
-        def _sigmoid(x): return np.array([1 / (1 + np.exp(-x_i)) for x_i in x])
-
-        for i in range(num_channels):
-            if i == 0:
-                view1[i] = 3 * _sigmoid(view1[i]) + 0.1 * view1[i]
-                view2[i] = 5 * np.tanh(view2[i]) + 0.2 * view2[i]
-
-            elif i == 1:
-                view1[i] = 5 * _sigmoid(view1[i]) + 0.2 * view1[i]
-                view2[i] = 2 * np.tanh(view2[i]) + 0.1 * view2[i]
-
-            elif i == 2:
-                view1[i] = 0.2 * np.exp(view1[i])
-                view2[i] = 0.1 * view2[i] ** 3 + view2[i]
-
-            elif i == 3:
-                view1[i] = -4 * _sigmoid(view1[i]) - 0.3 * view1[i]
-                view2[i] = -5 * np.tanh(view2[i]) - 0.4 * view2[i]
-
-            elif i == 4:
-                view1[i] = -3 * _sigmoid(view1[i]) - 0.2 * view1[i]
-                view2[i] = -6 * np.tanh(view2[i]) - 0.3 * view2[i]
-
-            else:
-                break
-
-        views_concat = np.concatenate([view1, view2], axis=0)
-        final_data = np.array([views_concat[i, :][None] for i in range(2 * data_dim)])
-
-        return final_data, test_sample, self.S_x, self.S_y
+        plt.tight_layout()
+        plt.show()
