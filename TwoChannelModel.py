@@ -1,6 +1,7 @@
 import numpy as np
 import tensorflow as tf
 import matplotlib.pyplot as plt
+from correlation_analysis import PCC_Matrix
 
 
 def _sigmoid(x):
@@ -12,8 +13,44 @@ class TwoChannelModel():
         np.random.seed(3333)
         self.num_samples = num_samples
 
-    def __call__(self):
-        return self._generate_samples()
+    def __call__(self, mode):
+        if mode == 'Gaussian':
+            return self._generate_Gaussian_data()
+        elif mode == 'Parabola':
+            return self._generate_samples()
+        else:
+            raise ValueError
+
+    def _generate_Gaussian_data(self):
+        # Mixing matrices
+        A_1 = np.random.normal(size=(5, 5))
+        A_2 = np.random.normal(size=(5, 5))
+
+        distinct_correlations = [0.9, 0.7, 0.0, 0.0, 0.0]
+
+        z_1 = np.empty(shape=(5, self.num_samples))
+        z_2 = np.empty(shape=(5, self.num_samples))
+
+        for index, rho in enumerate(distinct_correlations):
+            mean = np.array([0, 0])
+
+            cov = np.array([[1, rho],
+                            [rho, 1]])
+
+            bivariate_sample = np.random.multivariate_normal(mean, cov, size=self.num_samples,
+                                                            check_valid='warn',
+                                                            tol=1e-10).T
+
+            z_1[index] = bivariate_sample[0]
+            z_2[index] = bivariate_sample[1]
+
+        Cross_Covariance, _, _ = PCC_Matrix(z_1, z_2, self.num_samples)
+        print(f'Sources generated with the following Cross-Covariance:\n {Cross_Covariance}')
+
+        Az_1 = np.matmul(A_1, z_1)
+        Az_2 = np.matmul(A_2, z_2)
+
+        return self._apply_transformation(Az_1, Az_2, z_1, z_2)
 
     def _generate_samples(self):
         # Mixing matrices
@@ -27,8 +64,6 @@ class TwoChannelModel():
         s2 = s1**2
         s2 = s2 - np.mean(s2)
         s2 = s2/np.sqrt(np.var(s2))
-        #s1 = np.random.normal(loc=0, scale=1, size=self.num_samples)
-        #s2 = np.random.normal(loc=0, scale=1, size=self.num_samples)
 
         shared_1 = np.array([s1, s2])
         shared_2 = np.copy(shared_1)
@@ -44,6 +79,9 @@ class TwoChannelModel():
         Az_1 = np.matmul(A_1, z_1)
         Az_2 = np.matmul(A_2, z_2)
 
+        return self._apply_transformation(Az_1, Az_2, z_1, z_2)
+
+    def _apply_transformation(self, Az_1, Az_2, z_1, z_2):
         # Add non-linearities
         y_1 = np.zeros_like(Az_1)
         y_2 = np.zeros_like(Az_2)
