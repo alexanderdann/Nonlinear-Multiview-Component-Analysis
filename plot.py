@@ -65,13 +65,13 @@ def plot_eval(z_1, z_2, Az_1, Az_2, y_1, y_2, fy_1, fy_2, yhat_1, yhat_2, epsilo
     fig, axes = plt.subplots(2, 2)
     for s in range(2):
         axes[s, 0].scatter(z_1[s], epsilon[s], s=4)
-        xlab = '$\mathbf{s}_{\mathrm{X}}^{(' + str(s) + ')}$'
+        xlab = '$\mathbf{z}_{\mathrm{1}}^{(' + str(s) + ')}$'
         ylab = r'$\hat{\mathbf{\varepsilon}}^{(' + str(s) + ')}$'
         axes[s, 0].set_xlabel(xlab)
         axes[s, 0].set_ylabel(ylab)
 
         axes[s, 1].scatter(z_2[s], omega[s], s=4)
-        xlab = '$\mathbf{s}_{\mathrm{Y}}^{(' + str(s) + ')}$'
+        xlab = '$\mathbf{z}_{\mathrm{2}}^{(' + str(s) + ')}$'
         ylab = r'$\hat{\mathbf{\omega}}^{(' + str(s) + ')}$'
         axes[s, 1].set_xlabel(xlab)
         axes[s, 1].set_ylabel(ylab)
@@ -94,7 +94,7 @@ def plot_eval(z_1, z_2, Az_1, Az_2, y_1, y_2, fy_1, fy_2, yhat_1, yhat_2, epsilo
     legend.set_clim(0, 1)
     clrbr.set_label(r'Correlation', fontsize=15)
     plt.xlabel(r'$\hat{\mathbf{\varepsilon}}$', fontsize=18)
-    plt.ylabel(r'$\mathbf{s}_{\mathrm{1}}$', fontsize=18)
+    plt.ylabel(r'$\mathbf{z}_{\mathrm{1}}$', fontsize=18)
     plt.xticks(np.arange(0, dim2, 1), labels=np.arange(0, dim2, 1), fontsize=12)
     plt.yticks(np.arange(0, dim1, 1), np.arange(0, dim1, 1), fontsize=12)
     plt.tick_params(
@@ -121,7 +121,7 @@ def plot_eval(z_1, z_2, Az_1, Az_2, y_1, y_2, fy_1, fy_2, yhat_1, yhat_2, epsilo
     legend.set_clim(0, 1)
     clrbr.set_label(r'Correlation', fontsize=15)
     plt.xlabel(r'$\hat{\mathbf{\omega}}$', fontsize=18)
-    plt.ylabel(r'$\mathbf{s}_{\mathrm{2}}$', fontsize=18)
+    plt.ylabel(r'$\mathbf{z}_{\mathrm{2}}$', fontsize=18)
     plt.xticks(np.arange(0, dim2, 1), labels=np.arange(0, dim2, 1), fontsize=12)
     plt.yticks(np.arange(0, dim1, 1), np.arange(0, dim1, 1), fontsize=12)
     plt.tick_params(
