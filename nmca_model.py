@@ -6,10 +6,10 @@ import scipy
 from correlation_analysis import CCA
 
 
-def _build_channel_model(inp, v_ind, ch_ind):
+def _build_channel_model(inp, v_ind, ch_ind, hdim):
     # Build encoder
     enc_input = tf.keras.layers.Dense(
-        256,
+        hdim,
         activation='relu',
         name=f'View_{v_ind}_Encoder_DenseLayer_Channel_{ch_ind}'
     )(inp)
@@ -21,7 +21,7 @@ def _build_channel_model(inp, v_ind, ch_ind):
 
     # Build decoder
     x = tf.keras.layers.Dense(
-        256,
+        hdim,
         activation='relu',
         name=f'View_{v_ind}_Decoder_DenseLayer_Channel_{ch_ind}'
     )(enc_output)
@@ -34,12 +34,12 @@ def _build_channel_model(inp, v_ind, ch_ind):
     return enc_output, dec_output
 
 
-def _build_view_models(inputs, view_ind):
+def _build_view_models(inputs, view_ind, hdim):
     enc_outputs = list()
     dec_outputs = list()
 
     for i in range(5):
-        enc_output, dec_output = _build_channel_model(inputs[i], view_ind, i)
+        enc_output, dec_output = _build_channel_model(inputs[i], view_ind, i, hdim)
         enc_outputs.append(enc_output)
         dec_outputs.append(dec_output)
 
@@ -55,14 +55,14 @@ def _build_view_models(inputs, view_ind):
     return enc_outputs, dec_outputs
 
 
-def build_nmca_model():
+def build_nmca_model(hdim):
     inp_view_1 = tf.keras.layers.Input(shape=(5))
     inp_view_2 = tf.keras.layers.Input(shape=(5))
     view_1_splits = tf.split(inp_view_1, num_or_size_splits=5, axis=1)
     view_2_splits = tf.split(inp_view_2, num_or_size_splits=5, axis=1)
 
-    enc_outputs_1, dec_outputs_1 = _build_view_models(view_1_splits, 0)
-    enc_outputs_2, dec_outputs_2 = _build_view_models(view_2_splits, 1)
+    enc_outputs_1, dec_outputs_1 = _build_view_models(view_1_splits, 0, hdim)
+    enc_outputs_2, dec_outputs_2 = _build_view_models(view_2_splits, 1, hdim)
 
     model = tf.keras.Model(
         inputs=[inp_view_1, inp_view_2],
@@ -115,3 +115,17 @@ def create_writer(root_dir):
     os.makedirs(folder)
 
     return tf.summary.create_file_writer(folder)
+
+def create_grid_writer(root_dir, params=[]):
+    if not params:
+        raise AssertionError
+    
+    run_dir = f'{root_dir}/Grid'
+    folder = os.path.join(run_dir, ' '.join([str(param) for param in params]))
+    try:
+        os.makedirs(folder)
+    except:
+        raise FileExistsError
+    return tf.summary.create_file_writer(folder)
+
+    
