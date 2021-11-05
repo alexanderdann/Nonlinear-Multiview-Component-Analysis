@@ -93,6 +93,15 @@ def compute_distance_metric(S, U):
     dist = np.linalg.norm(Ps@Q, ord=2)
     return dist
 
+def compute_similarity_metric_v1(S, U):
+    _, _, _, _, ccor = CCA(tf.transpose(S), tf.transpose(U), 5)
+    return np.mean(ccor)
+
+def compute_similarity_metric_v2(S1, U1, S2, U2):
+    _, _, _, _, ccor_1 = CCA(tf.transpose(S1), tf.transpose(U1), 5)
+    _, _, _, _, ccor_2 = CCA(tf.transpose(S2), tf.transpose(U2), 5)
+    return np.mean(ccor_1+ccor_2)
+
 def create_writer(root_dir):
     folders = list()
     for file in os.listdir(root_dir):
@@ -120,7 +129,7 @@ def create_grid_writer(root_dir, params=[]):
     if not params:
         raise AssertionError
     
-    run_dir = f'{root_dir}/Grid'
+    run_dir = f'{root_dir}'
     folder = os.path.join(run_dir, ' '.join([str(param) for param in params]))
     try:
         os.makedirs(folder)
