@@ -36,22 +36,32 @@ def write_poly(writer, epoch, y_1, yhat_1):
         tf.summary.image("Poly", plot_to_image(inv_fig), step=epoch)
         writer.flush()
 
-def write_image_summary(writer, epoch, Az_1, Az_2, y_1, y_2, fy_1, fy_2):
+def write_image_summary(writer, epoch, Az_1, Az_2, y_1, y_2, fy_1, fy_2, yhat_1, yhat_2):
     with writer.as_default():
         # Inverse learning plot
         inv_fig, inv_axes = plt.subplots(5, 2, figsize=(10, 15))
         for c in range(5):
             inv_axes[c, 0].title.set_text(f'View {0} Channel {c}')
-            #inv_axes[c, 0].scatter(Az_1[c], y_1[c], label=r'$\mathrm{g}$')
             inv_axes[c, 0].scatter(Az_1[c], tf.transpose(fy_1)[c], label=r'$\mathrm{f}\circledast\mathrm{g}$')
 
             inv_axes[c, 1].title.set_text(f'View {1} Channel {c}')
-            #inv_axes[c, 1].scatter(Az_2[c], y_2[c], label=r'$\mathrm{g}$')
             inv_axes[c, 1].scatter(Az_2[c], tf.transpose(fy_2)[c], label=r'$\mathrm{f}\circledast\mathrm{g}$')
 
-        plt.legend()
         plt.tight_layout()
         tf.summary.image("Inverse learning", plot_to_image(inv_fig), step=epoch)
+        writer.flush()
+
+        # Reconstruction plot
+        rec_fig, rec_axes = plt.subplots(5, 2, figsize=(10, 15))
+        for c in range(5):
+            rec_axes[c, 0].title.set_text(f'View {0} Channel {c}')
+            rec_axes[c, 0].scatter(y_1[c], tf.transpose(yhat_1)[c])
+
+            rec_axes[c, 1].title.set_text(f'View {1} Channel {c}')
+            rec_axes[c, 1].scatter(y_2[c], tf.transpose(yhat_2)[c])
+
+        plt.tight_layout()
+        tf.summary.image("Reconstruction", plot_to_image(rec_fig), step=epoch)
         writer.flush()
 
 def write_PCC_summary(writer, epoch, z_1, z_2, epsilon, omega, samples):
@@ -110,31 +120,8 @@ def write_PCC_summary(writer, epoch, z_1, z_2, epsilon, omega, samples):
         tf.summary.image("PCC Plot", plot_to_image(fig), step=epoch)
         writer.flush()
 
-def write_metric_summary(writer, epoch, loss, cca_loss, rec_loss, ccor, dist, sim, sim_v1, sim_v2):
+def write_scalar_summary(writer, epoch, list_of_tuples):
     with writer.as_default():
-        tf.summary.scalar("Loss/Total", loss, step=epoch)
-        tf.summary.scalar("Loss/CCA", cca_loss, step=epoch)
-        tf.summary.scalar("Loss/reconstruction", rec_loss, step=epoch)
-        tf.summary.scalar("Canonical correlation/0", ccor[0], step=epoch)
-        tf.summary.scalar("Canonical correlation/1", ccor[1], step=epoch)
-        tf.summary.scalar("Canonical correlation/2", ccor[2], step=epoch)
-        tf.summary.scalar("Canonical correlation/3", ccor[3], step=epoch)
-        tf.summary.scalar("Canonical correlation/4", ccor[4], step=epoch)
-        tf.summary.scalar("Performance Measures/Distance measure", dist, step=epoch)
-        tf.summary.scalar("Performance Measures/Similarity measure", sim, step=epoch)
-        tf.summary.scalar("Performance Measures/Similarity measure 1st view", sim_v1, step=epoch)
-        tf.summary.scalar("Performance Measures/Similarity measure 2nd view", sim_v2, step=epoch)
-        writer.flush()
-
-def write_gradients_summary(writer, gradients, trainable_variables):
-    # Filtering the gradients to divide them into different groups
-    # Groups:   Encoder View 1 & View 2
-    #           Decoder View 1 & View 2
-    #           Encoder & Decoder View 1 Weights only
-    #           Encoder & Decoder View 2 Weights only
-    #           Encoder & Decoder View 1 Bias only
-    #           Encoder & Decoder View 2 Bias only
-    #           Encoder & Decoder View 1 Weights only
-    #           Encoder & Decoder View 2 Weights only
-    with writer.as_default():
-        pass
+        for tup in list_of_tuples:
+            tf.summary.scalar(tup[1], tup[0], step=epoch)
+    writer.flush()

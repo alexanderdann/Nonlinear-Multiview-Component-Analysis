@@ -30,11 +30,9 @@ def plot_eval(z_1, z_2, Az_1, Az_2, y_1, y_2, fy_1, fy_2, yhat_1, yhat_2, epsilo
     fig, axes = plt.subplots(5, 2, figsize=(10, 15))
     for c in range(5):
         axes[c, 0].title.set_text(f'View {0} Channel {c}')
-        axes[c, 0].scatter(Az_1[c], y_1[c], label=r'$\mathrm{g}$')
         axes[c, 0].scatter(Az_1[c], fy_1[c], label=r'$\mathrm{f}\circledast\mathrm{g}$')
 
         axes[c, 1].title.set_text(f'View {1} Channel {c}')
-        axes[c, 1].scatter(Az_2[c], y_2[c], label=r'$\mathrm{g}$')
         axes[c, 1].scatter(Az_2[c], fy_2[c], label=r'$\mathrm{f}\circledast\mathrm{g}$')
 
     plt.tight_layout()

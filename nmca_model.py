@@ -75,7 +75,7 @@ def build_nmca_model(hdim):
 def compute_loss(y_1, y_2, fy_1, fy_2, yhat_1, yhat_2, shared_components, lambda_reg=0.01):
     # CCA loss
     B1, B2, epsilon, omega, ccor = CCA(fy_1, fy_2, shared_components)
-    cca_loss = tf.reduce_mean(tf.square(tf.norm(tf.subtract(epsilon, omega), axis=0)))
+    cca_loss = tf.reduce_mean(tf.square(tf.norm(tf.subtract(epsilon, omega), axis=0))) / shared_components
 
     # Reconstruction loss
     rec_loss_1 = tf.square(tf.norm(tf.transpose(y_1) - yhat_1, axis=0))
@@ -123,7 +123,7 @@ def create_writer(root_dir):
 
     os.makedirs(folder)
 
-    return tf.summary.create_file_writer(folder)
+    return tf.summary.create_file_writer(folder), folder
 
 def create_grid_writer(root_dir, params=[]):
     if not params:
