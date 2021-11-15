@@ -10,7 +10,7 @@ def plot_to_image(figure):
     returns it. The supplied figure is closed and inaccessible after this call."""
     # Save the plot to a PNG in memory.
     buf = io.BytesIO()
-    plt.savefig(buf, format='png')
+    plt.savefig(buf, format='png', dpi=150)
     # Closing the figure prevents it from being displayed directly inside
     # the notebook.
     plt.close(figure)
@@ -21,6 +21,20 @@ def plot_to_image(figure):
     image = tf.expand_dims(image, 0)
     return image
 
+def write_poly(writer, epoch, y_1, yhat_1):
+    with writer.as_default():
+        print(tf.shape(y_1), tf.shape(yhat_1))
+        inv_fig, inv_axes = plt.subplots(int(tf.shape(y_1)[0]), 1, figsize=(10, 15))
+        for i in range(tf.shape(y_1)[0]):
+            inv_axes[i].scatter(y_1[i].numpy(), yhat_1[i].numpy(), s=3, label=f'default')
+            for deg in range(1, 6, 2):
+                coeff = np.polynomial.polynomial.polyfit(y_1[i].numpy(), yhat_1[i].numpy(), deg)
+                inv_axes[i].scatter(y_1[i].numpy(), np.polyval(coeff, y_1[i].numpy()), s=3, label=f'degree {deg}')
+            inv_axes[i].set_ylim([yhat_1[i].numpy().min()/3, 3*yhat_1[i].numpy().max()])
+            inv_axes[i].legend()
+
+        tf.summary.image("Poly", plot_to_image(inv_fig), step=epoch)
+        writer.flush()
 
 def write_image_summary(writer, epoch, Az_1, Az_2, y_1, y_2, fy_1, fy_2):
     with writer.as_default():
@@ -111,3 +125,16 @@ def write_metric_summary(writer, epoch, loss, cca_loss, rec_loss, ccor, dist, si
         tf.summary.scalar("Performance Measures/Similarity measure 1st view", sim_v1, step=epoch)
         tf.summary.scalar("Performance Measures/Similarity measure 2nd view", sim_v2, step=epoch)
         writer.flush()
+
+def write_gradients_summary(writer, gradients, trainable_variables):
+    # Filtering the gradients to divide them into different groups
+    # Groups:   Encoder View 1 & View 2
+    #           Decoder View 1 & View 2
+    #           Encoder & Decoder View 1 Weights only
+    #           Encoder & Decoder View 2 Weights only
+    #           Encoder & Decoder View 1 Bias only
+    #           Encoder & Decoder View 2 Bias only
+    #           Encoder & Decoder View 1 Weights only
+    #           Encoder & Decoder View 2 Weights only
+    with writer.as_default():
+        pass

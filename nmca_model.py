@@ -72,9 +72,9 @@ def build_nmca_model(hdim):
     return model
 
 
-def compute_loss(y_1, y_2, fy_1, fy_2, yhat_1, yhat_2, lambda_reg=0.01):
+def compute_loss(y_1, y_2, fy_1, fy_2, yhat_1, yhat_2, shared_components, lambda_reg=0.01):
     # CCA loss
-    B1, B2, epsilon, omega, ccor = CCA(fy_1, fy_2, 2)
+    B1, B2, epsilon, omega, ccor = CCA(fy_1, fy_2, shared_components)
     cca_loss = tf.reduce_mean(tf.square(tf.norm(tf.subtract(epsilon, omega), axis=0)))
 
     # Reconstruction loss

@@ -22,8 +22,8 @@ def CCA(view1, view2, shared_dim):
     V2_bar = tf.subtract(V2, tf.tile(tf.convert_to_tensor(mean_V2)[None], [M, 1]))
 
     Sigma12 = tf.linalg.matmul(tf.transpose(V1_bar), V2_bar) / (M - 1)
-    Sigma11 = tf.linalg.matmul(tf.transpose(V1_bar), V1_bar) / (M - 1) + r1 * tf.eye(ddim_1)
-    Sigma22 = tf.linalg.matmul(tf.transpose(V2_bar), V2_bar) / (M - 1) + r2 * tf.eye(ddim_2)
+    Sigma11 = tf.linalg.matmul(tf.transpose(V1_bar), V1_bar) / (M - 1) #+ r1 * tf.eye(ddim_1)
+    Sigma22 = tf.linalg.matmul(tf.transpose(V2_bar), V2_bar) / (M - 1) #+ r2 * tf.eye(ddim_2)
 
     Sigma11_root_inv = tf.linalg.sqrtm(tf.linalg.inv(Sigma11))
     Sigma22_root_inv = tf.linalg.sqrtm(tf.linalg.inv(Sigma22))
