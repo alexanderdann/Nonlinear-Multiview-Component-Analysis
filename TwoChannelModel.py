@@ -13,24 +13,23 @@ class TwoChannelModel():
         np.random.seed(3333)
         self.num_samples = num_samples
 
-    def __call__(self, mode):
+    def __call__(self, mode, distinct_correlations):
         if mode == 'Gaussian':
-            return self._generate_Gaussian_data()
+            return self._generate_Gaussian_data(distinct_correlations)
         elif mode == 'Parabola':
             return self._generate_samples()
         else:
             raise ValueError
 
-    def _generate_Gaussian_data(self):
+    def _generate_Gaussian_data(self, distinct_correlations=[]):
         # Mixing matrices
         A_1 = np.random.normal(size=(5, 5))
         A_2 = np.random.normal(size=(5, 5))
 
-        distinct_correlations = [0.9, 0.7, 0.0, 0.0, 0.0]
-
         z_1 = np.empty(shape=(5, self.num_samples))
         z_2 = np.empty(shape=(5, self.num_samples))
 
+        # distinct_correlations is a 5x5 diagonal matrix with correlation coefficients on its diagonal
         for index, rho in enumerate(distinct_correlations):
             mean = np.array([0, 0])
 
@@ -45,7 +44,7 @@ class TwoChannelModel():
             z_2[index] = bivariate_sample[1]
 
         Cross_Covariance, _, _ = PCC_Matrix(z_1, z_2, self.num_samples)
-        print(f'Sources generated with the following Cross-Covariance:\n {Cross_Covariance}')
+        print(f'\nSources generated with the following Cross-Covariance:\n {Cross_Covariance}')
 
         Az_1 = np.matmul(A_1, z_1)
         Az_2 = np.matmul(A_2, z_2)
@@ -92,7 +91,7 @@ class TwoChannelModel():
         y_1[1] = 5 * _sigmoid(Az_1[1]) + 0.2 * Az_1[1]
         y_2[1] = 2 * np.tanh(Az_2[1]) + 0.1 * Az_2[1]
 
-        y_1[2] = 0.2 * np.exp(Az_1[2])
+        y_1[2] = 7 * np.tanh(Az_1[2]) + 2.5 * Az_1[2]
         y_2[2] = 0.1 * Az_2[2]**3 + Az_2[2]
 
         y_1[3] = -4 * _sigmoid(Az_1[3]) - 0.3 * Az_1[3]
