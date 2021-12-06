@@ -48,9 +48,4 @@ def PCC_Matrix(view1, view2, observations):
     assert tf.shape(view1)[1] == tf.shape(view2)[1]
     calc_cov = tfp.stats.correlation(view1, view2, sample_axis=1, event_axis=0)
 
-    print('***')
-    print(calc_cov)
-    print('---')
-    print(tf.math.abs(calc_cov))
-
     return tf.math.abs(calc_cov), tf.shape(view1)[0], tf.shape(view2)[0]
