@@ -2,6 +2,10 @@ from correlation_analysis import CCA, PCC_Matrix
 import tensorflow as tf
 import matplotlib.pyplot as plt
 import numpy as np
+from numpy.polynomial.polynomial import polyfit as regression
+from numpy.polynomial.polynomial import Polynomial
+from numpy.polynomial.polynomial import polyval
+from sklearn.svm import SVR as svr
 import io
 
 
@@ -21,19 +25,19 @@ def plot_to_image(figure):
     image = tf.expand_dims(image, 0)
     return image
 
-def write_poly(writer, epoch, y_1, yhat_1):
+def write_poly(writer, epoch, x, f_x, view):
     with writer.as_default():
-        print(tf.shape(y_1), tf.shape(yhat_1))
-        inv_fig, inv_axes = plt.subplots(int(tf.shape(y_1)[0]), 1, figsize=(10, 15))
-        for i in range(tf.shape(y_1)[0]):
-            inv_axes[i].scatter(y_1[i].numpy(), yhat_1[i].numpy(), s=3, label=f'default')
-            for deg in range(1, 6, 2):
-                coeff = np.polynomial.polynomial.polyfit(y_1[i].numpy(), yhat_1[i].numpy(), deg)
-                inv_axes[i].scatter(y_1[i].numpy(), np.polyval(coeff, y_1[i].numpy()), s=3, label=f'degree {deg}')
-            inv_axes[i].set_ylim([yhat_1[i].numpy().min()/3, 3*yhat_1[i].numpy().max()])
-            inv_axes[i].legend()
-
-        tf.summary.image("Poly", plot_to_image(inv_fig), step=epoch)
+        inv_fig, inv_axes = plt.subplots(int(tf.shape(x)[0]), 1, figsize=(8, 12))
+        for i in range(tf.shape(x)[0]):
+            inv_axes[i].scatter(x[i].numpy(), f_x[i].numpy(), s=2, label=f'Original')
+            for deg in [1, 3, 7]:
+                coeff, diagnostic = Polynomial.fit(x[i].numpy(), f_x[i].numpy(), deg, full=True)
+                residual = str(np.around(diagnostic[0][0], 4))
+                inv_axes[i].scatter(x[i].numpy(), polyval(x[i].numpy(), coeff.convert().coef), s=3,
+                                    label=f'Degree {deg} Residual {residual}')
+            inv_axes[i].legend(loc='lower left', bbox_to_anchor=(0, 1.02, 1, 0.2), mode='expand', ncol=3)
+        plt.tight_layout()
+        tf.summary.image(f"Poly/{view}", plot_to_image(inv_fig), step=epoch)
         writer.flush()
 
 def write_image_summary(writer, epoch, Az_1, Az_2, y_1, y_2, fy_1, fy_2, yhat_1, yhat_2):
@@ -109,7 +113,6 @@ def write_scalar_summary(writer, epoch, list_of_tuples):
         for tup in list_of_tuples:
             tf.summary.scalar(tup[1], tup[0], step=epoch)
     writer.flush()
-
 
 def write_gradients_summary_sum(writer, epoch, gradients, trainable_variables):
     '''
