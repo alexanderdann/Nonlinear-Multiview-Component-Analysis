@@ -26,12 +26,15 @@ def plot_to_image(figure):
     return image
 
 def write_poly(writer, epoch, x, f_x, view):
+    std = tf.math.reduce_std(f_x, 0)[None]
+    norm_f_x = tf.transpose(f_x / tf.tile(std, tf.constant([1000, 1], tf.int32)))
+
     with writer.as_default():
         inv_fig, inv_axes = plt.subplots(int(tf.shape(x)[0]), 1, figsize=(8, 12))
         for i in range(tf.shape(x)[0]):
-            inv_axes[i].scatter(x[i].numpy(), f_x[i].numpy(), s=2, label=f'Original')
+            inv_axes[i].scatter(x[i].numpy(), norm_f_x[i].numpy(), s=2, label=f'Original')
             for deg in [1, 3, 7]:
-                coeff, diagnostic = Polynomial.fit(x[i].numpy(), f_x[i].numpy(), deg, full=True)
+                coeff, diagnostic = Polynomial.fit(x[i].numpy(), norm_f_x[i].numpy(), deg, full=True)
                 residual = str(np.around(diagnostic[0][0], 4))
                 inv_axes[i].scatter(x[i].numpy(), polyval(x[i].numpy(), coeff.convert().coef), s=3,
                                     label=f'Degree {deg} Residual {residual}')
@@ -83,8 +86,8 @@ def write_PCC_summary(writer, epoch, z_1, z_2, epsilon, omega, samples):
                 t.set_fontsize(10)
             legend_1.set_clim(0, 1)
             clrbr.set_label(r'Correlation', fontsize=15)
-            axes[idx].set_xticks(np.arange(1, dim2, 1))
-            axes[idx].set_yticks(np.arange(1, dim1, 1))
+            axes[idx].set_xticks(np.arange(0, dim2, 1), labels=np.arange(1, dim2+1, 1))
+            axes[idx].set_yticks(np.arange(0, dim1, 1), labels=np.arange(1, dim2+1, 1))
             axes[idx].tick_params(
                 axis='x',
                 which='both',
@@ -114,106 +117,106 @@ def write_scalar_summary(writer, epoch, list_of_tuples):
             tf.summary.scalar(tup[1], tup[0], step=epoch)
     writer.flush()
 
-def write_gradients_summary_sum(writer, epoch, gradients, trainable_variables):
-    '''
-    :param writer: used for tensorboard
-    :param epoch: current epoch of training
-    :param gradients: containing all gradients of the model
-    :param trainable_variables: containing all information regarding the corresponding gradient
-
-    Filtering the gradients to divide them into different groups
-    Groups are:
-       - Weights/Kernels only for each Encoder and Decoder
-       - Bias only for each Encoder and Decoder
-       - Encoder gradients (Combining weights/kernels and bias) for each view
-       - Decoder gradients (Combining weights/kernels and bias) for each view
-
-    Note: This functions uses SUMMATION of the gradients as final output
-    '''
-
-    view_0_encoder_kernel, view_1_encoder_kernel = list(), list()
-    view_0_encoder_bias, view_1_encoder_bias = list(), list()
-
-    view_0_decoder_kernel, view_1_decoder_kernel = list(), list()
-    view_0_decoder_bias, view_1_decoder_bias = list(), list()
-
-    for gradient in gradients:
-        for gradient_idx, gradient_unit in enumerate(gradient):
-
-            if 'View_0_Encoder' in trainable_variables[gradient_idx].name:
-                if 'kernel' in trainable_variables[gradient_idx].name:
-                    view_0_encoder_kernel.append(gradient_unit)
-                else:
-                    view_0_encoder_bias.append(gradient_unit)
-
-            elif 'View_1_Encoder' in trainable_variables[gradient_idx].name:
-                if 'kernel' in trainable_variables[gradient_idx].name:
-                    view_1_encoder_kernel.append(gradient_unit)
-                else:
-                    view_1_encoder_bias.append(gradient_unit)
-
-            elif 'View_0_Decoder' in trainable_variables[gradient_idx].name:
-                if 'kernel' in trainable_variables[gradient_idx].name:
-                    view_0_decoder_kernel.append(gradient_unit)
-                else:
-                    view_0_decoder_bias.append(gradient_unit)
-
-            elif 'View_1_Decoder' in trainable_variables[gradient_idx].name:
-                if 'kernel' in trainable_variables[gradient_idx].name:
-                    view_1_decoder_kernel.append(gradient_unit)
-                else:
-                    view_1_decoder_bias.append(gradient_unit)
-
-    grad_encoder_0_kernel = np.sum([np.linalg.norm(grad) for grad in view_0_encoder_kernel])
-    grad_encoder_1_kernel = np.sum([np.linalg.norm(grad) for grad in view_1_encoder_kernel])
-
-    grad_encoder_0_bias = np.sum([np.linalg.norm(grad) for grad in view_0_encoder_bias])
-    grad_encoder_1_bias = np.sum([np.linalg.norm(grad) for grad in view_1_encoder_bias])
-
-    grad_decoder_0_kernel = np.sum([np.linalg.norm(grad) for grad in view_0_decoder_kernel])
-    grad_decoder_1_kernel = np.sum([np.linalg.norm(grad) for grad in view_1_decoder_kernel])
-
-    grad_decoder_0_bias = np.sum([np.linalg.norm(grad) for grad in view_0_decoder_bias])
-    grad_decoder_1_bias = np.sum([np.linalg.norm(grad) for grad in view_1_decoder_bias])
-
-    units = [('Gradient Units SUM/Encoder View 0 Kernel', grad_encoder_0_kernel),
-               ('Gradient Units SUM/Encoder View 0 Bias', grad_encoder_0_bias),
-               ('Gradient Units SUM/Encoder View 1 Kernel', grad_encoder_1_kernel),
-               ('Gradient Units SUM/Encoder View 1 Bias', grad_encoder_1_bias),
-               ('Gradient Units SUM/Decoder View 0 Kernel', grad_decoder_0_kernel),
-               ('Gradient Units SUM/Decoder View 0 Bias', grad_decoder_0_bias),
-               ('Gradient Units SUM/Decoder View 1 Kernel', grad_decoder_1_kernel),
-               ('Gradient Units SUM/Decoder View 1 Bias', grad_decoder_1_bias)
-               ]
-
-    # Concatenating two lists of norms and taking the sum
-    grad_encoder_0 = np.sum([np.linalg.norm(grad) for grad in view_0_encoder_kernel] +
-                            [np.linalg.norm(grad) for grad in view_0_encoder_bias])
-
-    grad_encoder_1 = np.sum([np.linalg.norm(grad) for grad in view_1_encoder_kernel] +
-                            [np.linalg.norm(grad) for grad in view_1_encoder_bias])
-
-    encoders = [('Gradient Encoders SUM/View 0', grad_encoder_0),
-                ('Gradient Encoders SUM/View 1', grad_encoder_1)]
-
-    grad_decoder_0 = np.sum([np.linalg.norm(grad) for grad in view_0_decoder_kernel] +
-                            [np.linalg.norm(grad) for grad in view_0_decoder_bias])
-
-    grad_decoder_1 = np.sum([np.linalg.norm(grad) for grad in view_1_decoder_kernel] +
-                            [np.linalg.norm(grad) for grad in view_1_decoder_bias])
-
-    decoders = [('Gradient Decoders SUM/View 0', grad_decoder_0),
-                ('Gradient Decoders SUM/View 1', grad_decoder_1)]
-
-    with writer.as_default():
-        for path, variable in units:
-            tf.summary.scalar(path, variable, step=epoch)
-
-        for path, variable in encoders:
-            tf.summary.scalar(path, variable, step=epoch)
-
-        for path, variable in decoders:
-            tf.summary.scalar(path, variable, step=epoch)
+#def write_gradients_summary_sum(writer, epoch, gradients, trainable_variables):
+#    '''
+#    :param writer: used for tensorboard
+#    :param epoch: current epoch of training
+#    :param gradients: containing all gradients of the model
+#    :param trainable_variables: containing all information regarding the corresponding gradient
+#
+#    Filtering the gradients to divide them into different groups
+#    Groups are:
+#       - Weights/Kernels only for each Encoder and Decoder
+#       - Bias only for each Encoder and Decoder
+#       - Encoder gradients (Combining weights/kernels and bias) for each view
+#       - Decoder gradients (Combining weights/kernels and bias) for each view
+#
+#    Note: This functions uses SUMMATION of the gradients as final output
+#    '''
+#
+#    view_0_encoder_kernel, view_1_encoder_kernel = list(), list()
+#    view_0_encoder_bias, view_1_encoder_bias = list(), list()
+#
+#    view_0_decoder_kernel, view_1_decoder_kernel = list(), list()
+#    view_0_decoder_bias, view_1_decoder_bias = list(), list()
+#
+#    for gradient in gradients:
+#        for gradient_idx, gradient_unit in enumerate(gradient):
+#
+#            if 'View_0_Encoder' in trainable_variables[gradient_idx].name:
+#                if 'kernel' in trainable_variables[gradient_idx].name:
+#                    view_0_encoder_kernel.append(gradient_unit)
+#                else:
+#                    view_0_encoder_bias.append(gradient_unit)
+#
+#            elif 'View_1_Encoder' in trainable_variables[gradient_idx].name:
+#                if 'kernel' in trainable_variables[gradient_idx].name:
+#                    view_1_encoder_kernel.append(gradient_unit)
+#                else:
+#                    view_1_encoder_bias.append(gradient_unit)
+#
+#            elif 'View_0_Decoder' in trainable_variables[gradient_idx].name:
+#                if 'kernel' in trainable_variables[gradient_idx].name:
+#                    view_0_decoder_kernel.append(gradient_unit)
+#                else:
+#                    view_0_decoder_bias.append(gradient_unit)
+#
+#            elif 'View_1_Decoder' in trainable_variables[gradient_idx].name:
+#                if 'kernel' in trainable_variables[gradient_idx].name:
+#                    view_1_decoder_kernel.append(gradient_unit)
+#                else:
+#                    view_1_decoder_bias.append(gradient_unit)
+#
+#    grad_encoder_0_kernel = np.sum([np.linalg.norm(grad) for grad in view_0_encoder_kernel])
+#    grad_encoder_1_kernel = np.sum([np.linalg.norm(grad) for grad in view_1_encoder_kernel])
+#
+#    grad_encoder_0_bias = np.sum([np.linalg.norm(grad) for grad in view_0_encoder_bias])
+#    grad_encoder_1_bias = np.sum([np.linalg.norm(grad) for grad in view_1_encoder_bias])
+#
+#    grad_decoder_0_kernel = np.sum([np.linalg.norm(grad) for grad in view_0_decoder_kernel])
+#    grad_decoder_1_kernel = np.sum([np.linalg.norm(grad) for grad in view_1_decoder_kernel])
+#
+#    grad_decoder_0_bias = np.sum([np.linalg.norm(grad) for grad in view_0_decoder_bias])
+#    grad_decoder_1_bias = np.sum([np.linalg.norm(grad) for grad in view_1_decoder_bias])
+#
+#    units = [('Gradient Units SUM/Encoder View 0 Kernel', grad_encoder_0_kernel),
+#               ('Gradient Units SUM/Encoder View 0 Bias', grad_encoder_0_bias),
+#               ('Gradient Units SUM/Encoder View 1 Kernel', grad_encoder_1_kernel),
+#               ('Gradient Units SUM/Encoder View 1 Bias', grad_encoder_1_bias),
+#               ('Gradient Units SUM/Decoder View 0 Kernel', grad_decoder_0_kernel),
+#               ('Gradient Units SUM/Decoder View 0 Bias', grad_decoder_0_bias),
+#               ('Gradient Units SUM/Decoder View 1 Kernel', grad_decoder_1_kernel),
+#               ('Gradient Units SUM/Decoder View 1 Bias', grad_decoder_1_bias)
+#               ]
+#
+#    # Concatenating two lists of norms and taking the sum
+#    grad_encoder_0 = np.sum([np.linalg.norm(grad) for grad in view_0_encoder_kernel] +
+#                            [np.linalg.norm(grad) for grad in view_0_encoder_bias])
+#
+#    grad_encoder_1 = np.sum([np.linalg.norm(grad) for grad in view_1_encoder_kernel] +
+#                            [np.linalg.norm(grad) for grad in view_1_encoder_bias])
+#
+#    encoders = [('Gradient Encoders SUM/View 0', grad_encoder_0),
+#                ('Gradient Encoders SUM/View 1', grad_encoder_1)]
+#
+#    grad_decoder_0 = np.sum([np.linalg.norm(grad) for grad in view_0_decoder_kernel] +
+#                            [np.linalg.norm(grad) for grad in view_0_decoder_bias])
+#
+#    grad_decoder_1 = np.sum([np.linalg.norm(grad) for grad in view_1_decoder_kernel] +
+#                            [np.linalg.norm(grad) for grad in view_1_decoder_bias])
+#
+#    decoders = [('Gradient Decoders SUM/View 0', grad_decoder_0),
+#                ('Gradient Decoders SUM/View 1', grad_decoder_1)]
+#
+#    with writer.as_default():
+#        for path, variable in units:
+#            tf.summary.scalar(path, variable, step=epoch)
+#
+#        for path, variable in encoders:
+#            tf.summary.scalar(path, variable, step=epoch)
+#
+#        for path, variable in decoders:
+#            tf.summary.scalar(path, variable, step=epoch)
 
 def write_gradients_summary_mean(writer, epoch, gradients, trainable_variables):
     '''
